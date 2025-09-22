@@ -2,6 +2,7 @@ import { Timestamp } from 'firebase/firestore';
 import type { Customer, User, DayOfWeek } from './firebase-types';
 import { getCustomers } from './customer-service';
 import { getUsers } from './user-service';
+import { getTSPOptimizationService } from './tsp-optimization-service';
 
 // Route cache for daily routes
 const routeCache = new Map<string, any>();
@@ -135,50 +136,89 @@ const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c;
 };
 
-// Simple route optimization (nearest neighbor)
-const optimizeRoute = (customers: Customer[]): { customers: Customer[]; totalDistance: number } => {
+// Proper TSP optimization using Distance Matrix API
+const optimizeRoute = async (customers: Customer[]): Promise<{ customers: Customer[]; totalDistance: number; estimatedDuration: number }> => {
   if (customers.length <= 1) {
-    return { customers, totalDistance: 0 };
+    return {
+      customers,
+      totalDistance: 0,
+      estimatedDuration: customers.length * 30 // 30 minutes per customer
+    };
   }
-  
-  const optimizedCustomers: Customer[] = [];
-  const unvisited = [...customers];
-  
-  // Start with first customer
-  let current = unvisited.shift()!;
-  optimizedCustomers.push(current);
-  
-  // Find nearest neighbor for each remaining customer
-  while (unvisited.length > 0) {
-    let nearestIndex = 0;
-    let minDistance = Infinity;
-    
-    for (let i = 0; i < unvisited.length; i++) {
-      const distance = calculateDistance(
-        current.lat, current.lng,
-        unvisited[i].lat, unvisited[i].lng
-      );
-      
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestIndex = i;
-      }
-    }
-    
-    current = unvisited.splice(nearestIndex, 1)[0];
+
+  try {
+    // Use proper TSP optimization service
+    const tspService = getTSPOptimizationService(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '');
+
+    // Use hard-coded start/end location: 1467 Creeks Edge Ct, Fleming Island FL 32003
+    const startLocation = {
+      lat: 30.0997, // Fleming Island area latitude
+      lng: -81.7065  // Fleming Island area longitude
+    };
+
+    const optimizationResult = await tspService.optimizeRoute(customers, {
+      apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+      startLocation,
+      optimizeFor: 'distance',
+      avoidTolls: false,
+      avoidHighways: false
+    });
+
+    console.log(`🎯 TSP optimized route: ${customers.length} customers reordered to minimize ${optimizationResult.totalDistance.toFixed(1)} miles (individual round-trip from 1467 Creeks Edge Ct)`);
+
+    return {
+      customers: optimizationResult.optimizedCustomers,
+      totalDistance: optimizationResult.totalDistance,
+      estimatedDuration: optimizationResult.estimatedDuration
+    };
+
+  } catch (error) {
+    console.error('Error using TSP optimization, falling back to nearest neighbor:', error);
+
+    // Fallback to nearest neighbor algorithm
+    const optimizedCustomers: Customer[] = [];
+    const unvisited = [...customers];
+
+    // Start with first customer
+    let current = unvisited.shift()!;
     optimizedCustomers.push(current);
+
+    // Find nearest neighbor for each remaining customer
+    while (unvisited.length > 0) {
+      let nearestIndex = 0;
+      let minDistance = Infinity;
+
+      for (let i = 0; i < unvisited.length; i++) {
+        const distance = calculateDistance(
+          current.lat, current.lng,
+          unvisited[i].lat, unvisited[i].lng
+        );
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestIndex = i;
+        }
+      }
+
+      current = unvisited.splice(nearestIndex, 1)[0];
+      optimizedCustomers.push(current);
+    }
+
+    // Calculate total distance
+    let totalDistance = 0;
+    for (let i = 1; i < optimizedCustomers.length; i++) {
+      totalDistance += calculateDistance(
+        optimizedCustomers[i - 1].lat, optimizedCustomers[i - 1].lng,
+        optimizedCustomers[i].lat, optimizedCustomers[i].lng
+      );
+    }
+
+    return {
+      customers: optimizedCustomers,
+      totalDistance,
+      estimatedDuration: optimizedCustomers.length * 30 // 30 minutes per customer
+    };
   }
-  
-  // Calculate total distance
-  let totalDistance = 0;
-  for (let i = 1; i < optimizedCustomers.length; i++) {
-    totalDistance += calculateDistance(
-      optimizedCustomers[i - 1].lat, optimizedCustomers[i - 1].lng,
-      optimizedCustomers[i].lat, optimizedCustomers[i].lng
-    );
-  }
-  
-  return { customers: optimizedCustomers, totalDistance };
 };
 
 // Generate routes for the next 48 hours
@@ -206,11 +246,8 @@ export const generateRoutesForNext48Hours = async (): Promise<SimpleRoute[]> => 
     // Limit to 12 customers per crew per day
     const limitedCustomers = customerNeeds.slice(0, 12).map(need => need.customer);
     
-    // Optimize route
-    const { customers: optimizedCustomers, totalDistance } = optimizeRoute(limitedCustomers);
-    
-    // Calculate estimated duration (30 minutes per customer + travel time)
-    const estimatedDuration = optimizedCustomers.length * 30 + Math.ceil(totalDistance * 5); // 5 min per mile
+    // Optimize route using TSP
+    const { customers: optimizedCustomers, totalDistance, estimatedDuration } = await optimizeRoute(limitedCustomers);
     
     // Get crew members
     const crewMembers = crews.get(crewId)!;

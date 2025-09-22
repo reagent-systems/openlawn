@@ -9,6 +9,7 @@ import type {
 } from './firebase-types';
 import { calculateCustomerPriorities, getCustomersNeedingService, getCustomers } from './customer-service';
 import { getUsers, getUsersByRole } from './user-service';
+import { getTSPOptimizationService } from './tsp-optimization-service';
 
 // Route cache for daily routes
 const routeCache = new Map<string, DailyRoute>();
@@ -176,27 +177,61 @@ export const optimizeRouteForCrew = async (
   // Limit to max customers per crew
   const limitedCustomers = sortedCustomers.slice(0, crew.availability.maxCustomers);
   
-  // Simple route optimization (nearest neighbor)
-  const optimizedPath = limitedCustomers.map(customer => ({
+  // Use proper TSP optimization with Distance Matrix API
+  let optimizedCustomers: Customer[] = limitedCustomers;
+  let totalDistance = 0;
+  let estimatedDuration = limitedCustomers.length * 30; // 30 minutes per customer
+
+  try {
+    // Get the TSP optimization service
+    const tspService = getTSPOptimizationService(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '');
+
+    // Use hard-coded start/end location: 1467 Creeks Edge Ct, Fleming Island FL 32003
+    const startLocation = {
+      lat: 30.0997, // Fleming Island area latitude
+      lng: -81.7065  // Fleming Island area longitude
+    };
+
+    const optimizationResult = await tspService.optimizeRoute(limitedCustomers, {
+      apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+      startLocation,
+      optimizeFor: 'distance',
+      avoidTolls: false,
+      avoidHighways: false,
+      departureTime: date
+    });
+
+    optimizedCustomers = optimizationResult.optimizedCustomers;
+    totalDistance = optimizationResult.totalDistance;
+    estimatedDuration = optimizationResult.estimatedDuration;
+
+    console.log(`🎯 TSP optimized route for crew ${crew.crewId}: ${limitedCustomers.length} customers reordered to minimize ${totalDistance.toFixed(1)} miles (individual round-trip from 1467 Creeks Edge Ct)`);
+    console.log('📋 Original order:', limitedCustomers.map(c => c.name));
+    console.log('📋 Optimized order:', optimizedCustomers.map(c => c.name));
+
+    // Check if optimization actually changed the order
+    const originalNames = limitedCustomers.map(c => c.name);
+    const optimizedNames = optimizedCustomers.map(c => c.name);
+    if (JSON.stringify(originalNames) === JSON.stringify(optimizedNames)) {
+      console.warn('⚠️ WARNING: Route optimization returned the same customer order!');
+    }
+
+  } catch (error) {
+    console.error('Error using TSP optimization, falling back to priority order:', error);
+    // Fall back to priority-sorted order if optimization fails
+    optimizedCustomers = limitedCustomers;
+  }
+
+  // Create optimized path for map display
+  const optimizedPath = optimizedCustomers.map(customer => ({
     lat: customer.lat,
     lng: customer.lng
   }));
-  
-  // Calculate total distance
-  let totalDistance = 0;
-  for (let i = 1; i < optimizedPath.length; i++) {
-    const prev = optimizedPath[i - 1];
-    const curr = optimizedPath[i];
-    totalDistance += calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng);
-  }
-  
-  // Calculate estimated duration (30 minutes per customer + travel time)
-  const estimatedDuration = limitedCustomers.length * 30; // minutes
-  
+
   return {
     crewId: crew.crewId,
     date,
-    customers: limitedCustomers,
+    customers: optimizedCustomers,
     optimizedPath,
     estimatedDuration,
     totalDistance,
@@ -268,17 +303,54 @@ export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> =
       // Limit to 12 customers max per crew
       const assignedCustomers = compatibleCustomers.slice(0, 12);
       
-      // Create simple route - just the order of customers (no complex optimization)
+      // Use TSP optimization to find optimal customer order
+      let optimizedCustomers: Customer[] = assignedCustomers;
+      let totalDistance = 0;
+      let estimatedDuration = assignedCustomers.length * 30; // 30 minutes per customer
+
+      try {
+        // Get the TSP optimization service
+        const tspService = getTSPOptimizationService(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '');
+
+        // Use hard-coded start/end location: 1467 Creeks Edge Ct, Fleming Island FL 32003
+        const startLocation = {
+          lat: 30.0997, // Fleming Island area latitude
+          lng: -81.7065  // Fleming Island area longitude
+        };
+
+        const optimizationResult = await tspService.optimizeRoute(assignedCustomers, {
+          apiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+          startLocation,
+          optimizeFor: 'distance',
+          avoidTolls: false,
+          avoidHighways: false,
+          departureTime: date
+        });
+
+        optimizedCustomers = optimizationResult.optimizedCustomers;
+        totalDistance = optimizationResult.totalDistance;
+        estimatedDuration = optimizationResult.estimatedDuration;
+
+        console.log(`🎯 TSP optimized route for crew ${crew.crewId}: ${assignedCustomers.length} customers reordered to minimize ${totalDistance.toFixed(1)} miles (individual round-trip from 1467 Creeks Edge Ct)`);
+        console.log('📋 Original order:', assignedCustomers.map(c => c.name));
+        console.log('📋 Optimized order:', optimizedCustomers.map(c => c.name));
+
+      } catch (error) {
+        console.error('Error using TSP optimization, using original order:', error);
+        optimizedCustomers = assignedCustomers;
+      }
+
+      // Create optimized route
       const route: DailyRoute = {
         crewId: crew.crewId,
         date,
-        customers: assignedCustomers,
-        optimizedPath: assignedCustomers.map(c => ({ lat: c.lat, lng: c.lng })),
-        estimatedDuration: assignedCustomers.length * 30, // 30 minutes per customer
-        totalDistance: 0, // We don't need precise distance calculations
+        customers: optimizedCustomers,
+        optimizedPath: optimizedCustomers.map(c => ({ lat: c.lat, lng: c.lng })),
+        estimatedDuration,
+        totalDistance,
       };
       
-      console.log(`Created route for crew ${crew.crewId} with ${assignedCustomers.length} customers`);
+      console.log(`Created optimized route for crew ${crew.crewId} with ${optimizedCustomers.length} customers`);
       routes.push(route);
     } else {
       console.log(`No compatible customers found for crew ${crew.crewId}`);
