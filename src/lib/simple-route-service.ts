@@ -2,6 +2,7 @@ import { Timestamp } from 'firebase/firestore';
 import type { Customer, User, DayOfWeek } from './firebase-types';
 import { getCustomers } from './customer-service';
 import { getUsers } from './user-service';
+import { getTSPOptimizationService } from './tsp-optimization-service';
 
 // Route cache for daily routes
 const routeCache = new Map<string, any>();
@@ -135,50 +136,72 @@ const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c;
 };
 
-// Simple route optimization (nearest neighbor)
-const optimizeRoute = (customers: Customer[]): { customers: Customer[]; totalDistance: number } => {
+// Route optimization using TSP service
+const optimizeRoute = async (customers: Customer[]): Promise<{ customers: Customer[]; totalDistance: number }> => {
   if (customers.length <= 1) {
     return { customers, totalDistance: 0 };
   }
-  
-  const optimizedCustomers: Customer[] = [];
-  const unvisited = [...customers];
-  
-  // Start with first customer
-  let current = unvisited.shift()!;
-  optimizedCustomers.push(current);
-  
-  // Find nearest neighbor for each remaining customer
-  while (unvisited.length > 0) {
-    let nearestIndex = 0;
-    let minDistance = Infinity;
-    
-    for (let i = 0; i < unvisited.length; i++) {
-      const distance = calculateDistance(
-        current.lat, current.lng,
-        unvisited[i].lat, unvisited[i].lng
-      );
-      
-      if (distance < minDistance) {
-        minDistance = distance;
-        nearestIndex = i;
-      }
-    }
-    
-    current = unvisited.splice(nearestIndex, 1)[0];
+
+  try {
+    // Use TSP optimization service
+    const tspService = getTSPOptimizationService(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '');
+
+    // Use first customer as starting point
+    const startLocation = { lat: customers[0].lat, lng: customers[0].lng };
+
+    const optimizationResult = await tspService.optimizeRoute(customers, {
+      startLocation,
+      optimizeFor: 'distance',
+      travelMode: 'driving',
+    });
+
+    return {
+      customers: optimizationResult.optimizedCustomers,
+      totalDistance: optimizationResult.totalDistance,
+    };
+  } catch (error) {
+    console.error('TSP optimization failed in simple route service, falling back to nearest neighbor:', error);
+
+    // Fallback to simple nearest neighbor algorithm
+    const optimizedCustomers: Customer[] = [];
+    const unvisited = [...customers];
+
+    // Start with first customer
+    let current = unvisited.shift()!;
     optimizedCustomers.push(current);
+
+    // Find nearest neighbor for each remaining customer
+    while (unvisited.length > 0) {
+      let nearestIndex = 0;
+      let minDistance = Infinity;
+
+      for (let i = 0; i < unvisited.length; i++) {
+        const distance = calculateDistance(
+          current.lat, current.lng,
+          unvisited[i].lat, unvisited[i].lng
+        );
+
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestIndex = i;
+        }
+      }
+
+      current = unvisited.splice(nearestIndex, 1)[0];
+      optimizedCustomers.push(current);
+    }
+
+    // Calculate total distance
+    let totalDistance = 0;
+    for (let i = 1; i < optimizedCustomers.length; i++) {
+      totalDistance += calculateDistance(
+        optimizedCustomers[i - 1].lat, optimizedCustomers[i - 1].lng,
+        optimizedCustomers[i].lat, optimizedCustomers[i].lng
+      );
+    }
+
+    return { customers: optimizedCustomers, totalDistance };
   }
-  
-  // Calculate total distance
-  let totalDistance = 0;
-  for (let i = 1; i < optimizedCustomers.length; i++) {
-    totalDistance += calculateDistance(
-      optimizedCustomers[i - 1].lat, optimizedCustomers[i - 1].lng,
-      optimizedCustomers[i].lat, optimizedCustomers[i].lng
-    );
-  }
-  
-  return { customers: optimizedCustomers, totalDistance };
 };
 
 // Generate routes for the next 48 hours
@@ -207,7 +230,7 @@ export const generateRoutesForNext48Hours = async (): Promise<SimpleRoute[]> => 
     const limitedCustomers = customerNeeds.slice(0, 12).map(need => need.customer);
     
     // Optimize route
-    const { customers: optimizedCustomers, totalDistance } = optimizeRoute(limitedCustomers);
+    const { customers: optimizedCustomers, totalDistance } = await optimizeRoute(limitedCustomers);
     
     // Calculate estimated duration (30 minutes per customer + travel time)
     const estimatedDuration = optimizedCustomers.length * 30 + Math.ceil(totalDistance * 5); // 5 min per mile

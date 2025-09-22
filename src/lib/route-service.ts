@@ -1,14 +1,15 @@
 import { Timestamp } from 'firebase/firestore';
-import type { 
-  Customer, 
-  CustomerPriority, 
-  CrewAvailability, 
-  DailyRoute, 
+import type {
+  Customer,
+  CustomerPriority,
+  CrewAvailability,
+  DailyRoute,
   User,
-  DayOfWeek 
+  DayOfWeek
 } from './firebase-types';
 import { calculateCustomerPriorities, getCustomersNeedingService, getCustomers } from './customer-service';
 import { getUsers, getUsersByRole } from './user-service';
+import { getTSPOptimizationService } from './tsp-optimization-service';
 
 // Route cache for daily routes
 const routeCache = new Map<string, DailyRoute>();
@@ -142,7 +143,7 @@ export const assignClustersToCrews = (
   return assignments;
 };
 
-// Optimize route for a crew using Google Maps Distance Matrix API
+// Optimize route for a crew using TSP optimization
 export const optimizeRouteForCrew = async (
   crew: CrewAvailability,
   customers: CustomerPriority[],
@@ -150,57 +151,82 @@ export const optimizeRouteForCrew = async (
 ): Promise<DailyRoute> => {
   // Get all customers to match with priorities
   const allCustomers = await getCustomers();
-  
+
   // Filter customers by crew service types and get full customer data
   const compatibleCustomers = customers
     .map(customerPriority => {
       const customer = allCustomers.find(c => c.id === customerPriority.customerId);
       if (!customer) return null;
-      
+
       // Check if customer's service type matches crew's capabilities
-      const hasCompatibleService = customer.services.some(service => 
+      const hasCompatibleService = customer.services.some(service =>
         crew.capabilities.includes(service.type)
       );
-      
+
       return hasCompatibleService ? customer : null;
     })
     .filter(Boolean) as Customer[];
-  
-  // Sort by priority
+
+  // Sort by priority (keep high priority customers first)
   const sortedCustomers = compatibleCustomers.sort((a, b) => {
     const aPriority = customers.find(c => c.customerId === a.id)?.priority || 0;
     const bPriority = customers.find(c => c.customerId === b.id)?.priority || 0;
     return bPriority - aPriority;
   });
-  
+
   // Limit to max customers per crew
   const limitedCustomers = sortedCustomers.slice(0, crew.availability.maxCustomers);
-  
-  // Simple route optimization (nearest neighbor)
-  const optimizedPath = limitedCustomers.map(customer => ({
-    lat: customer.lat,
-    lng: customer.lng
-  }));
-  
-  // Calculate total distance
-  let totalDistance = 0;
-  for (let i = 1; i < optimizedPath.length; i++) {
-    const prev = optimizedPath[i - 1];
-    const curr = optimizedPath[i];
-    totalDistance += calculateDistance(prev.lat, prev.lng, curr.lat, curr.lng);
+
+  if (limitedCustomers.length === 0) {
+    return {
+      crewId: crew.crewId,
+      date,
+      customers: [],
+      optimizedPath: [],
+      estimatedDuration: 0,
+      totalDistance: 0,
+    };
   }
-  
-  // Calculate estimated duration (30 minutes per customer + travel time)
-  const estimatedDuration = limitedCustomers.length * 30; // minutes
-  
-  return {
-    crewId: crew.crewId,
-    date,
-    customers: limitedCustomers,
-    optimizedPath,
-    estimatedDuration,
-    totalDistance,
-  };
+
+  // Use TSP optimization service
+  const tspService = getTSPOptimizationService(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '');
+
+  try {
+    // Determine start location
+    const startLocation = crew.availability.currentLocation || { lat: 30.0997, lng: -81.7065 };
+
+    const optimizationResult = await tspService.optimizeRoute(limitedCustomers, {
+      startLocation,
+      optimizeFor: 'distance',
+      travelMode: 'driving',
+    });
+
+    return {
+      crewId: crew.crewId,
+      date,
+      customers: optimizationResult.optimizedCustomers,
+      optimizedPath: optimizationResult.optimizedPath,
+      estimatedDuration: optimizationResult.estimatedDuration,
+      totalDistance: optimizationResult.totalDistance,
+    };
+  } catch (error) {
+    console.error('TSP optimization failed in optimizeRouteForCrew, falling back to simple order:', error);
+
+    // Fallback to simple order (preserving priority sorting)
+    const optimizedPath = limitedCustomers.map(customer => ({
+      lat: customer.lat,
+      lng: customer.lng
+    }));
+
+    return {
+      crewId: crew.crewId,
+      date,
+      customers: limitedCustomers,
+      optimizedPath,
+      estimatedDuration: limitedCustomers.length * 30,
+      totalDistance: 0,
+    };
+  }
 };
 
 // Calculate distance between two points (Haversine formula)
@@ -267,19 +293,50 @@ export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> =
     if (compatibleCustomers.length > 0) {
       // Limit to 12 customers max per crew
       const assignedCustomers = compatibleCustomers.slice(0, 12);
-      
-      // Create simple route - just the order of customers (no complex optimization)
-      const route: DailyRoute = {
-        crewId: crew.crewId,
-        date,
-        customers: assignedCustomers,
-        optimizedPath: assignedCustomers.map(c => ({ lat: c.lat, lng: c.lng })),
-        estimatedDuration: assignedCustomers.length * 30, // 30 minutes per customer
-        totalDistance: 0, // We don't need precise distance calculations
-      };
-      
-      console.log(`Created route for crew ${crew.crewId} with ${assignedCustomers.length} customers`);
-      routes.push(route);
+
+      // Get TSP optimization service
+      const tspService = getTSPOptimizationService(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '');
+
+      try {
+        // Determine start location (use crew's current location or a default)
+        const startLocation = crew.availability.currentLocation || { lat: 30.0997, lng: -81.7065 }; // Default to Jacksonville, FL area
+
+        console.log(`Optimizing route for crew ${crew.crewId} with ${assignedCustomers.length} customers`);
+
+        // Use TSP optimization to get optimal order
+        const optimizationResult = await tspService.optimizeRoute(assignedCustomers, {
+          startLocation,
+          optimizeFor: 'distance',
+          travelMode: 'driving',
+        });
+
+        const route: DailyRoute = {
+          crewId: crew.crewId,
+          date,
+          customers: optimizationResult.optimizedCustomers, // ← OPTIMIZED order!
+          optimizedPath: optimizationResult.optimizedPath,
+          estimatedDuration: optimizationResult.estimatedDuration,
+          totalDistance: optimizationResult.totalDistance,
+        };
+
+        console.log(`Created optimized route for crew ${crew.crewId} with ${assignedCustomers.length} customers`);
+        console.log(`Route optimization: ${optimizationResult.totalDistance.toFixed(2)} miles, ${optimizationResult.estimatedDuration.toFixed(0)} minutes`);
+        routes.push(route);
+      } catch (error) {
+        console.error(`TSP optimization failed for crew ${crew.crewId}, falling back to original order:`, error);
+
+        // Fallback to original order if TSP fails
+        const route: DailyRoute = {
+          crewId: crew.crewId,
+          date,
+          customers: assignedCustomers,
+          optimizedPath: assignedCustomers.map(c => ({ lat: c.lat, lng: c.lng })),
+          estimatedDuration: assignedCustomers.length * 30, // 30 minutes per customer
+          totalDistance: 0,
+        };
+
+        routes.push(route);
+      }
     } else {
       console.log(`No compatible customers found for crew ${crew.crewId}`);
     }
