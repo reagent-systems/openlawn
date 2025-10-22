@@ -13,9 +13,10 @@ import { AddEmployeeSheet } from "@/components/lawn-route/AddEmployeeSheet"
 import { EditEmployeeSheet } from "@/components/lawn-route/EditEmployeeSheet"
 import { AddCrewSheet } from "@/components/lawn-route/AddCrewSheet"
 import { CrewPopup } from "@/components/lawn-route/CrewPopup"
+import { CompanySettingsSheet } from "@/components/lawn-route/CompanySettingsSheet"
 import { Header } from "@/components/lawn-route/Header"
 import { Button } from "@/components/ui/button"
-import { Plus, User as UserIcon, Users, Building2 } from "lucide-react"
+import { Plus, User as UserIcon, Users, Building2, Settings } from "lucide-react"
 import { subscribeToCustomers, addCustomer } from "@/lib/customer-service"
 import { subscribeToUsers } from "@/lib/user-service"
 import { generateOptimalRoutes, getCachedRoute } from "@/lib/route-service"
@@ -34,7 +35,7 @@ export default function LawnRoutePage() {
   const [baseLocation, setBaseLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
   
   // State for manager view
-  const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews'>('customers')
+  const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews' | 'settings'>('customers')
   const [isAddCustomerSheetOpen, setIsAddCustomerSheetOpen] = useState(false)
   const [isEditCustomerSheetOpen, setIsEditCustomerSheetOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
@@ -51,6 +52,7 @@ export default function LawnRoutePage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [selectedRoute, setSelectedRoute] = useState<DailyRoute | null>(null)
   const [isCrewPopupOpen, setIsCrewPopupOpen] = useState(false)
+  const [isCompanySettingsOpen, setIsCompanySettingsOpen] = useState(false)
 
   // Generate human-readable crew IDs using animal names
   const generateCrewId = () => {
@@ -244,14 +246,16 @@ export default function LawnRoutePage() {
       // Swipe left - go to next view
       if (activeView === 'customers') setActiveView('employees')
       else if (activeView === 'employees') setActiveView('crews')
-      else if (activeView === 'crews') setActiveView('customers')
+      else if (activeView === 'crews') setActiveView('settings')
+      else if (activeView === 'settings') setActiveView('customers')
     }
 
     if (isRightSwipe) {
       // Swipe right - go to previous view
-      if (activeView === 'customers') setActiveView('crews')
+      if (activeView === 'customers') setActiveView('settings')
       else if (activeView === 'employees') setActiveView('customers')
       else if (activeView === 'crews') setActiveView('employees')
+      else if (activeView === 'settings') setActiveView('crews')
     }
   }
 
@@ -525,12 +529,22 @@ export default function LawnRoutePage() {
       <button
         onClick={() => setActiveView('crews')}
         className={`flex-1 py-3 px-4 text-center transition-colors ${
-          activeView === 'crews' 
-            ? 'bg-primary text-primary-foreground' 
+          activeView === 'crews'
+            ? 'bg-primary text-primary-foreground'
             : 'hover:bg-muted'
         }`}
       >
         Crews
+      </button>
+      <button
+        onClick={() => setActiveView('settings')}
+        className={`flex-1 py-3 px-4 text-center transition-colors ${
+          activeView === 'settings'
+            ? 'bg-primary text-primary-foreground'
+            : 'hover:bg-muted'
+        }`}
+      >
+        Settings
       </button>
     </div>
   )
@@ -749,6 +763,61 @@ export default function LawnRoutePage() {
     );
   }
 
+  // Render settings view
+  const renderSettingsView = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold flex items-center gap-2">
+          <Settings className="w-5 h-5" />
+          Company Settings
+        </h2>
+      </div>
+
+      <div className="space-y-4 p-4">
+        {/* Company Info */}
+        <div className="p-4 border rounded-lg bg-card">
+          <h3 className="font-semibold mb-2">Company Information</h3>
+          <div className="space-y-2 text-sm">
+            <div>
+              <span className="text-muted-foreground">Company Name:</span>
+              <span className="ml-2 font-medium">{companyName || 'Loading...'}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Home Base:</span>
+              <span className="ml-2 font-medium">
+                {baseLocation ? baseLocation.address : 'Not set'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Set Home Base Button */}
+        <div
+          onClick={() => setIsCompanySettingsOpen(true)}
+          className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
+        >
+          <Settings className="w-10 h-10 mb-2" />
+          <p className="font-semibold">{baseLocation ? 'Update Home Base Location' : 'Set Home Base Location'}</p>
+          <p className="text-xs text-muted-foreground mt-1">Where crews start and end their day</p>
+        </div>
+      </div>
+    </div>
+  )
+
+  // Handler to reload base location after update
+  const handleLocationUpdated = async () => {
+    if (!userProfile?.companyId) return;
+    try {
+      const { getCompany } = await import('@/lib/company-service');
+      const company = await getCompany(userProfile.companyId);
+      if (company?.baseLocation) {
+        setBaseLocation(company.baseLocation);
+      }
+    } catch (error) {
+      console.error('Error reloading base location:', error);
+    }
+  }
+
   if (isManager) {
     return (
       <ProtectedRoute>
@@ -778,6 +847,7 @@ export default function LawnRoutePage() {
                 {activeView === 'customers' && renderCustomersView()}
                 {activeView === 'employees' && renderEmployeesView()}
                 {activeView === 'crews' && renderCrewsView()}
+                {activeView === 'settings' && renderSettingsView()}
               </div>
 
               {/* Navigation Footer */}
@@ -794,6 +864,10 @@ export default function LawnRoutePage() {
                   <button
                     onClick={() => setActiveView('crews')}
                     className={`h-4 flex-1 rounded-full transition-colors ${activeView === 'crews' ? 'bg-primary' : 'bg-muted'} hover:opacity-80`}
+                  />
+                  <button
+                    onClick={() => setActiveView('settings')}
+                    className={`h-4 flex-1 rounded-full transition-colors ${activeView === 'settings' ? 'bg-primary' : 'bg-muted'} hover:opacity-80`}
                   />
                 </div>
               </div>
@@ -861,6 +935,15 @@ export default function LawnRoutePage() {
             onOpenChange={setIsCrewPopupOpen}
             route={selectedRoute}
             employees={users}
+          />
+
+          {/* Company Settings Sheet */}
+          <CompanySettingsSheet
+            open={isCompanySettingsOpen}
+            onOpenChange={setIsCompanySettingsOpen}
+            companyId={userProfile?.companyId || ''}
+            currentBaseLocation={baseLocation}
+            onLocationUpdated={handleLocationUpdated}
           />
         </div>
       </ProtectedRoute>
