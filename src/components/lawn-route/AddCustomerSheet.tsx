@@ -126,7 +126,7 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
             <SheetHeader className="text-left">
               <SheetTitle>Add New Customer</SheetTitle>
               <SheetDescription>
-                Fill in the details for the new customer. Click save when you're done.
+                Fill in the details for the new customer. Click save when you are done.
               </SheetDescription>
             </SheetHeader>
             <div className="grid gap-4 py-6">

@@ -55,7 +55,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         <div className="text-center space-y-4">
           <h2 className="text-2xl font-bold text-destructive">Access Denied</h2>
           <p className="text-muted-foreground">
-            You don't have permission to access this page. Required role: {requiredRole}
+            You do not have permission to access this page. Required role: {requiredRole}
           </p>
           <p className="text-sm text-muted-foreground">
             Your current role: {userProfile.role}

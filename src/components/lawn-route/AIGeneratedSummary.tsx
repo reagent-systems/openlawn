@@ -39,7 +39,7 @@ export function AIGeneratedSummary({ customer }: AIGeneratedSummaryProps) {
       
       {!summary && !isLoading && (
         <div className="text-center p-4 border-2 border-dashed rounded-lg">
-          <p className="text-sm text-muted-foreground mb-4">Get a quick summary of this customer's needs.</p>
+          <p className="text-sm text-muted-foreground mb-4">Get a quick summary of this customer&apos;s needs.</p>
           <Button onClick={handleGenerateSummary} disabled={isLoading}>
             <Sparkles className="w-4 h-4 mr-2" />
             Generate Summary

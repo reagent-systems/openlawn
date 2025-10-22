@@ -194,7 +194,7 @@ export function EditEmployeeSheet({ open, onOpenChange, employee, onUpdateEmploy
               <SheetHeader className="text-left">
                 <SheetTitle>Edit Employee</SheetTitle>
                 <SheetDescription>
-                  Update the details for {employee.name}. Click save when you're done.
+                  Update the details for {employee.name}. Click save when you are done.
                 </SheetDescription>
               </SheetHeader>
               <div className="grid gap-4 py-6">

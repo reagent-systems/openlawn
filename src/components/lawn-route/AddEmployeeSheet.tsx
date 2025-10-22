@@ -139,7 +139,7 @@ export function AddEmployeeSheet({ open, onOpenChange, onAddEmployee }: AddEmplo
             <SheetHeader className="text-left">
               <SheetTitle>Add New Employee</SheetTitle>
               <SheetDescription>
-                Fill in the details for the new employee. Click save when you're done.
+                Fill in the details for the new employee. Click save when you are done.
               </SheetDescription>
             </SheetHeader>
             <div className="grid gap-4 py-6">
