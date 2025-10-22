@@ -29,6 +29,12 @@ import {
   SheetClose
 } from "@/components/ui/sheet"
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -39,8 +45,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { Calendar, Clock, Trash2 } from "lucide-react"
+import { Calendar, Clock, Trash2, Camera, CheckCircle2 } from "lucide-react"
 import type { ServicePreferences, DayOfWeek, Customer } from "@/lib/types"
+import { ServicePhotoManager } from "@/components/lawn-route/ServicePhotoManager"
 
 interface EditCustomerSheetProps {
   open: boolean
@@ -75,6 +82,7 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false)
+  const [activeTab, setActiveTab] = React.useState('details')
 
   const SERVICE_TYPES = [
     { value: 'push-mow', label: 'Push Mow' },
@@ -177,8 +185,8 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent 
-          side="bottom" 
+        <SheetContent
+          side="bottom"
           className="rounded-t-lg max-h-[90svh] overflow-y-auto"
           onPointerDownOutside={(e) => {
             // Don't close if clicking on autocomplete
@@ -187,15 +195,26 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
             }
           }}
         >
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              <SheetHeader className="text-left">
-                <SheetTitle>Edit Customer</SheetTitle>
-                <SheetDescription>
-                  Update the details for {customer.name}. Click save when you're done.
-                </SheetDescription>
-              </SheetHeader>
-              <div className="grid gap-4 py-6">
+          <SheetHeader className="text-left">
+            <SheetTitle>Edit Customer</SheetTitle>
+            <SheetDescription>
+              Update the details for {customer.name}
+            </SheetDescription>
+          </SheetHeader>
+
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="services" className="flex items-center gap-2">
+                <Camera className="w-4 h-4" />
+                Services & Photos
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="details" className="space-y-4">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)}>
+                  <div className="grid gap-4 py-6">
                 <FormField
                   control={form.control}
                   name="name"
@@ -398,30 +417,84 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
                     )}
                   />
                 </div>
-              </div>
-              <SheetFooter className="flex justify-between">
-                <Button 
-                  type="button" 
-                  variant="destructive" 
-                  onClick={() => setShowDeleteDialog(true)}
-                  className="flex items-center gap-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete Customer
-                </Button>
-                <div className="flex gap-2">
-                  <SheetClose asChild>
-                    <Button type="button" variant="outline">
-                      Cancel
+                  </div>
+                  <SheetFooter className="flex justify-between">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => setShowDeleteDialog(true)}
+                      className="flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete Customer
                     </Button>
-                  </SheetClose>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Updating..." : "Update Customer"}
-                  </Button>
-                </div>
-              </SheetFooter>
-            </form>
-          </Form>
+                    <div className="flex gap-2">
+                      <SheetClose asChild>
+                        <Button type="button" variant="outline">
+                          Cancel
+                        </Button>
+                      </SheetClose>
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? "Updating..." : "Update Customer"}
+                      </Button>
+                    </div>
+                  </SheetFooter>
+                </form>
+              </Form>
+            </TabsContent>
+
+            <TabsContent value="services" className="space-y-4">
+              <div className="py-6 space-y-6">
+                {customer.services && customer.services.length > 0 ? (
+                  customer.services.map((service) => (
+                    <div key={service.id} className="border rounded-lg p-4 space-y-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-semibold text-lg capitalize">
+                            {service.type.replace('-', ' ')}
+                          </h3>
+                          <p className="text-sm text-muted-foreground">
+                            {service.description || 'No description'}
+                          </p>
+                          {service.scheduledDate && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Scheduled: {new Date(service.scheduledDate.seconds * 1000).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-sm font-medium ${
+                          service.status === 'completed' ? 'bg-green-100 text-green-800' :
+                          service.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {service.status === 'completed' && <CheckCircle2 className="w-4 h-4 inline mr-1" />}
+                          {service.status}
+                        </div>
+                      </div>
+
+                      {/* Photo Manager */}
+                      <ServicePhotoManager
+                        customerId={customer.id}
+                        serviceId={service.id}
+                        onPhotosChanged={() => {
+                          toast({
+                            title: "Photos Updated",
+                            description: "Service photos have been updated successfully",
+                          });
+                        }}
+                        canEdit={service.status !== 'completed'}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Camera className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                    <p>No services found for this customer</p>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
         </SheetContent>
       </Sheet>
 

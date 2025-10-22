@@ -49,15 +49,18 @@ const mapOptions = {
   ],
 }
 
-export function ManagerMap({ 
-  customers, 
-  employees, 
-  routes = [], 
-  selectedCustomer, 
-  onSelectCustomer, 
-  apiKey 
+// Keep libraries constant to avoid reloading
+const libraries: ("places")[] = ['places']
+
+export function ManagerMap({
+  customers,
+  employees,
+  routes = [],
+  selectedCustomer,
+  onSelectCustomer,
+  apiKey
 }: ManagerMapProps) {
-  
+
   React.useEffect(() => {
     if (!apiKey) {
       console.error("Google Maps API key is missing. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in your .env file.");
@@ -67,7 +70,7 @@ export function ManagerMap({
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: apiKey || "",
-    libraries: ['places']
+    libraries
   })
 
   React.useEffect(() => {

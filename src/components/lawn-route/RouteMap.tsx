@@ -47,10 +47,11 @@ const mapOptions = {
   ],
 }
 
-// No libraries needed - Directions API is part of core Maps JavaScript API
+// Keep libraries constant to avoid reloading
+const libraries: ("places")[] = ['places']
 
 export function RouteMap({ customers, selectedCustomer, onSelectCustomer, apiKey }: RouteMapProps) {
-  
+
   React.useEffect(() => {
     if (!apiKey) {
       console.error("Google Maps API key is missing. Please set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in your .env file.");
@@ -60,7 +61,7 @@ export function RouteMap({ customers, selectedCustomer, onSelectCustomer, apiKey
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: apiKey || "",
-    libraries: ['places']
+    libraries
   })
 
   React.useEffect(() => {

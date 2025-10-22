@@ -20,6 +20,9 @@ interface RouteDisplayProps {
   apiKey?: string;
 }
 
+// Keep libraries constant to avoid reloading
+const libraries: ("places")[] = ['places']
+
 const containerStyle = {
   width: '100%',
   height: '100%',
@@ -69,7 +72,7 @@ export function RouteDisplay({
   const { isLoaded, loadError } = useJsApiLoader({
     id: 'google-map-script',
     googleMapsApiKey: apiKey || "",
-    libraries: ['places']
+    libraries
   })
 
   React.useEffect(() => {

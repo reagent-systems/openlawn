@@ -280,8 +280,106 @@ export const searchCustomers = async (searchTerm: string): Promise<Customer[]> =
   return customers.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.services.some(service => 
+    customer.services.some(service =>
       service.type.toLowerCase().includes(searchTerm.toLowerCase())
     )
   );
+};
+
+// Photo management for services
+/**
+ * Add photo URLs to a service
+ */
+export const addPhotosToService = async (
+  customerId: string,
+  serviceId: string,
+  photoUrls: string[]
+): Promise<void> => {
+  const customer = await getCustomer(customerId);
+  if (!customer) throw new Error('Customer not found');
+
+  const updatedServices = customer.services.map(service => {
+    if (service.id === serviceId) {
+      return {
+        ...service,
+        photos: [...(service.photos || []), ...photoUrls],
+      };
+    }
+    return service;
+  });
+
+  await updateCustomer(customerId, { services: updatedServices });
+};
+
+/**
+ * Remove photo URL from a service
+ */
+export const removePhotoFromService = async (
+  customerId: string,
+  serviceId: string,
+  photoUrl: string
+): Promise<void> => {
+  const customer = await getCustomer(customerId);
+  if (!customer) throw new Error('Customer not found');
+
+  const updatedServices = customer.services.map(service => {
+    if (service.id === serviceId) {
+      return {
+        ...service,
+        photos: (service.photos || []).filter(url => url !== photoUrl),
+      };
+    }
+    return service;
+  });
+
+  await updateCustomer(customerId, { services: updatedServices });
+};
+
+/**
+ * Get all photos for a service
+ */
+export const getServicePhotos = async (
+  customerId: string,
+  serviceId: string
+): Promise<string[]> => {
+  const customer = await getCustomer(customerId);
+  if (!customer) throw new Error('Customer not found');
+
+  const service = customer.services.find(s => s.id === serviceId);
+  return service?.photos || [];
+};
+
+/**
+ * Mark service as completed with photos
+ */
+export const completeServiceWithPhotos = async (
+  customerId: string,
+  serviceId: string,
+  beforePhotos: string[],
+  afterPhotos: string[],
+  notes?: string
+): Promise<void> => {
+  const customer = await getCustomer(customerId);
+  if (!customer) throw new Error('Customer not found');
+
+  const service = customer.services.find(s => s.id === serviceId);
+  if (!service) throw new Error('Service not found');
+
+  // Update service status
+  await updateServiceForCustomer(customerId, serviceId, {
+    status: 'completed',
+    completedDate: Timestamp.now(),
+    notes: notes || service.notes,
+    photos: [...beforePhotos, ...afterPhotos],
+  });
+
+  // Add to service history
+  await addServiceRecord(customerId, {
+    date: Timestamp.now(),
+    managerId: customer.createdBy,
+    beforePhotos,
+    afterPhotos,
+    notes: notes || '',
+    status: 'completed',
+  });
 }; 
