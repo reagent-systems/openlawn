@@ -16,7 +16,7 @@ interface PlacesAutocompleteProps {
 
 declare global {
   interface Window {
-    google: typeof google
+    google: any
   }
 }
 
@@ -62,6 +62,8 @@ export function PlacesAutocomplete({
     })
 
     // Add place_changed event listener
+    if (!autocompleteRef.current) return;
+
     const listener = autocompleteRef.current.addListener("place_changed", () => {
       const place = autocompleteRef.current?.getPlace()
       console.log("Place selected:", place)

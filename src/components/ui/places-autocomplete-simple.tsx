@@ -16,7 +16,7 @@ interface PlacesAutocompleteProps {
 
 declare global {
   interface Window {
-    google: typeof google
+    google: any
   }
 }
 
@@ -68,7 +68,7 @@ export function PlacesAutocompleteSimple({
       input,
       types: ['address'],
       componentRestrictions: { country: 'us' }
-    }, (predictions, status) => {
+    }, (predictions: any, status: any) => {
       if (status === window.google.maps.places.PlacesServiceStatus.OK && predictions) {
         setPredictions(predictions)
         setShowPredictions(true)
@@ -84,7 +84,7 @@ export function PlacesAutocompleteSimple({
     
     service.getDetails({
       placeId: prediction.place_id
-    }, (place, status) => {
+    }, (place: any, status: any) => {
       if (status === window.google.maps.places.PlacesServiceStatus.OK && place) {
         console.log("Place details:", place)
         if (place.formatted_address) {

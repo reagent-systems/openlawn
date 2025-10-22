@@ -114,7 +114,7 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
   // Update form when customer changes
   React.useEffect(() => {
     if (customer) {
-      const serviceType = customer.services[0]?.type || 'push-mow';
+      const serviceType = customer.services?.[0]?.type || 'push-mow';
       const frequency = customer.servicePreferences?.serviceFrequency || 7;
       const serviceFrequency = frequency === 7 ? 'weekly' : 
                              frequency === 14 ? 'biweekly' : 
@@ -458,13 +458,15 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
                           </p>
                           {service.scheduledDate && (
                             <p className="text-sm text-muted-foreground mt-1">
-                              Scheduled: {new Date(service.scheduledDate.seconds * 1000).toLocaleDateString()}
+                              Scheduled: {typeof service.scheduledDate === 'object' && 'seconds' in service.scheduledDate
+                                ? new Date(service.scheduledDate.seconds * 1000).toLocaleDateString()
+                                : new Date(service.scheduledDate).toLocaleDateString()}
                             </p>
                           )}
                         </div>
                         <div className={`px-3 py-1 rounded-full text-sm font-medium ${
                           service.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          service.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
+                          service.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
                           'bg-gray-100 text-gray-800'
                         }`}>
                           {service.status === 'completed' && <CheckCircle2 className="w-4 h-4 inline mr-1" />}

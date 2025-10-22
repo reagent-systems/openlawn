@@ -191,6 +191,7 @@ If you do not use a tool, set the action to 'none' and provide a 'responseText'.
 export async function agentFlow(input: AgentFlowInput): Promise<AgentFlowOutput> {
   const { output } = await agentPrompt(input, {
     // This logic maps the tool's output back to the structured response we want.
+    // @ts-ignore - custom is not in type definitions but may be supported
     custom: {
       async addCustomer(input: AddCustomerToolInput) {
         return {
@@ -216,7 +217,7 @@ export async function agentFlow(input: AgentFlowInput): Promise<AgentFlowOutput>
               }
           };
       },
-      async $noTool(input) {
+      async $noTool(input: any) {
         // If the LLM decides not to call a tool, we generate a text response.
         const llmResponse = await ai.generate({
           prompt: `You are a helpful assistant. The user said: "${input.command}". Please provide a brief, helpful response.`,

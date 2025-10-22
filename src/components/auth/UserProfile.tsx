@@ -91,9 +91,11 @@ export const UserProfile: React.FC = () => {
           <div className="flex items-center space-x-3">
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">
-              Member since {userProfile.createdAt instanceof Date 
-                ? userProfile.createdAt.toLocaleDateString() 
-                : new Date(userProfile.createdAt).toLocaleDateString()}
+              Member since {userProfile.createdAt instanceof Date
+                ? userProfile.createdAt.toLocaleDateString()
+                : typeof userProfile.createdAt === 'object' && 'toDate' in userProfile.createdAt
+                ? userProfile.createdAt.toDate().toLocaleDateString()
+                : new Date().toLocaleDateString()}
             </span>
           </div>
         </div>

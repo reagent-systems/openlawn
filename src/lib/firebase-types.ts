@@ -34,7 +34,14 @@ export interface User extends BaseDocument {
   status: 'available' | 'busy' | 'offline';
   capabilities?: string[]; // Service types this user can handle
   region?: string; // Geographic area or zip code
-  
+
+  // Additional user profile fields
+  displayName?: string; // Display name for the user
+  photoURL?: string; // Profile photo URL
+  isActive?: boolean; // Whether the user is active
+  companyId?: string; // Company ID for multi-tenant support
+  notes?: string; // Additional notes about the user
+
   // Crew management fields (replaces crews collection)
   crewName?: string; // Display name for the crew
   crewDescription?: string; // Optional crew description

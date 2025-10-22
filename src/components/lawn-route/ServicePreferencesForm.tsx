@@ -78,12 +78,20 @@ export function ServicePreferencesForm({
     });
   };
 
-  const handleFrequencyChange = (frequency: ServicePreferences['serviceFrequency']) => {
+  const handleFrequencyChange = (frequency: string) => {
     onChange({
       ...preferences,
-      serviceFrequency: frequency,
+      serviceFrequency: frequency as ServicePreferences['serviceFrequency'],
     });
   };
+
+  // Convert serviceFrequency to string for the Select component
+  const frequencyValue = typeof preferences.serviceFrequency === 'number'
+    ? preferences.serviceFrequency === 7 ? 'weekly'
+    : preferences.serviceFrequency === 14 ? 'biweekly'
+    : preferences.serviceFrequency === 30 ? 'monthly'
+    : 'one-time'
+    : preferences.serviceFrequency;
 
   const handleSpecialInstructionsChange = (instructions: string) => {
     onChange({
@@ -169,7 +177,7 @@ export function ServicePreferencesForm({
         <div className="space-y-3">
           <Label className="text-base font-medium">Service Frequency</Label>
           <Select
-            value={preferences.serviceFrequency}
+            value={frequencyValue}
             onValueChange={handleFrequencyChange}
             disabled={disabled}
           >

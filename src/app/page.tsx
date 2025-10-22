@@ -231,8 +231,8 @@ export default function LawnRoutePage() {
           scheduledDate: new Date() as any,
           status: 'scheduled',
         }],
-        lastServiceDate: null,
-        nextServiceDate: null,
+        lastServiceDate: undefined,
+        nextServiceDate: undefined,
         createdBy: userProfile?.id || '',
         servicePreferences: {
           preferredDays: data.servicePreferences.preferredDays,
@@ -410,7 +410,7 @@ export default function LawnRoutePage() {
           await assignUserToCrew(employeeId, {
             crewId: crewId,
             serviceTypes: data.serviceTypes,
-            title: null, // Keep existing title
+            title: undefined, // Keep existing title
           });
         }
         
@@ -424,7 +424,7 @@ export default function LawnRoutePage() {
           await assignUserToCrew(employeeId, {
             crewId: crewId,
             serviceTypes: data.serviceTypes,
-            title: null, // Keep existing title
+            title: undefined, // Keep existing title
           });
         }
       }

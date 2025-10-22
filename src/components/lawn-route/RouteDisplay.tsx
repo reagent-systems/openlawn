@@ -253,15 +253,6 @@ export function RouteDisplay({
                 clickable: !isToday, // Only tomorrow routes are clickable
               },
             }}
-            onClick={() => {
-              if (!isToday) {
-                setSelectedRouteIndex(index);
-                // Show customers for this route
-                console.log(`Clicked on tomorrow route for crew ${route.crewId}:`, route.customers.map(c => c.name));
-              }
-              // Call the route click handler for managers
-              onRouteClick?.(route);
-            }}
           />
         );
       })}

@@ -17,11 +17,9 @@ import {
 import { db } from './firebase';
 import type {
   Customer,
-  Employee,
-  Crew,
-  Route,
+  User,
+  DailyRoute,
   Service,
-  CompanySettings,
 } from './firebase-types';
 
 // Generic CRUD operations
@@ -110,50 +108,50 @@ export const deleteCustomer = async (id: string): Promise<void> => {
   return deleteDocument('customers', id);
 };
 
-// Employee services
-export const getEmployees = async (): Promise<Employee[]> => {
-  const q = query(collection(db, 'employees'), orderBy('name'));
+// Employee services - now using User type and users collection
+export const getEmployees = async (): Promise<User[]> => {
+  const q = query(collection(db, 'users'), orderBy('name'));
   const querySnapshot = await getDocs(q);
-  
+
   return querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
-  })) as Employee[];
+  })) as User[];
 };
 
-export const getAvailableEmployees = async (): Promise<Employee[]> => {
+export const getAvailableEmployees = async (): Promise<User[]> => {
   const q = query(
-    collection(db, 'employees'),
+    collection(db, 'users'),
     where('status', '==', 'available'),
     orderBy('name')
   );
   const querySnapshot = await getDocs(q);
-  
+
   return querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
-  })) as Employee[];
+  })) as User[];
 };
 
-export const createEmployee = async (data: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
-  return createDocument('employees', data);
+export const createEmployee = async (data: Omit<User, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+  return createDocument('users', data);
 };
 
-export const updateEmployee = async (id: string, data: Partial<Employee>): Promise<void> => {
-  return updateDocument('employees', id, data);
+export const updateEmployee = async (id: string, data: Partial<User>): Promise<void> => {
+  return updateDocument('users', id, data);
 };
 
 // Crew services - now handled through user-service.ts
 // Crews are managed through the users collection with crewId field
 
 // Route services
-export const getRoutesForDate = async (date: Date): Promise<Route[]> => {
+export const getRoutesForDate = async (date: Date): Promise<DailyRoute[]> => {
   const startOfDay = new Date(date);
   startOfDay.setHours(0, 0, 0, 0);
-  
+
   const endOfDay = new Date(date);
   endOfDay.setHours(23, 59, 59, 999);
-  
+
   const q = query(
     collection(db, 'routes'),
     where('date', '>=', Timestamp.fromDate(startOfDay)),
@@ -161,18 +159,18 @@ export const getRoutesForDate = async (date: Date): Promise<Route[]> => {
     orderBy('date')
   );
   const querySnapshot = await getDocs(q);
-  
+
   return querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
-  })) as Route[];
+  })) as unknown as DailyRoute[];
 };
 
-export const createRoute = async (data: Omit<Route, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
+export const createRoute = async (data: Omit<DailyRoute, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> => {
   return createDocument('routes', data);
 };
 
-export const updateRoute = async (id: string, data: Partial<Route>): Promise<void> => {
+export const updateRoute = async (id: string, data: Partial<DailyRoute>): Promise<void> => {
   return updateDocument('routes', id, data);
 };
 
@@ -230,26 +228,26 @@ export const subscribeToEmployees = (
 
 export const subscribeToRoutes = (
   date: Date,
-  callback: (routes: Route[]) => void
+  callback: (routes: DailyRoute[]) => void
 ) => {
   const startOfDay = new Date(date);
   startOfDay.setHours(0, 0, 0, 0);
-  
+
   const endOfDay = new Date(date);
   endOfDay.setHours(23, 59, 59, 999);
-  
+
   const q = query(
     collection(db, 'routes'),
     where('date', '>=', Timestamp.fromDate(startOfDay)),
     where('date', '<=', Timestamp.fromDate(endOfDay)),
     orderBy('date')
   );
-  
+
   return onSnapshot(q, (querySnapshot) => {
     const routes = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-    })) as Route[];
+    })) as unknown as DailyRoute[];
     callback(routes);
   });
 };

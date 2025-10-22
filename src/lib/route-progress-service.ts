@@ -112,7 +112,7 @@ export class RouteProgressCalculator {
       
       // Time metrics
       timeElapsed: Math.round(timeElapsed),
-      estimatedTotalTime: route.totalDuration,
+      estimatedTotalTime: route.totalDuration || route.estimatedDuration || 0,
       timeProgress: timeProgress.percentage,
       
       // Current status
@@ -189,9 +189,10 @@ export class RouteProgressCalculator {
    * Calculate time-based progress
    */
   private static calculateTimeProgress(route: Route, timeElapsed: number): { percentage: number } {
-    const percentage = route.totalDuration > 0 ? 
-      Math.min(100, (timeElapsed / route.totalDuration) * 100) : 0
-    
+    const totalDuration = route.totalDuration || route.estimatedDuration || 0;
+    const percentage = totalDuration > 0 ?
+      Math.min(100, (timeElapsed / totalDuration) * 100) : 0
+
     return { percentage: Math.round(percentage) }
   }
 
@@ -293,17 +294,20 @@ export class RouteProgressCalculator {
     stopsCompleted: number
   ): number {
     if (route.stops.length === 0) return 0
-    
-    const expectedProgress = timeElapsed / route.totalDuration
+
+    const totalDuration = route.totalDuration || route.estimatedDuration || 0;
+    if (totalDuration === 0) return 0;
+
+    const expectedProgress = timeElapsed / totalDuration
     const actualProgress = stopsCompleted / route.stops.length
-    
+
     if (actualProgress >= expectedProgress) return 0
-    
+
     const expectedStops = expectedProgress * route.stops.length
     const missingStops = expectedStops - stopsCompleted
-    
+
     // Estimate delay based on average time per stop
-    const averageTimePerStop = route.totalDuration / route.stops.length
+    const averageTimePerStop = totalDuration / route.stops.length
     return missingStops * averageTimePerStop
   }
 
@@ -327,13 +331,15 @@ export class RouteProgressCalculator {
    */
   private static getRouteStartTime(route: Route): Date | null {
     if (route.stops.length === 0) return null
-    
+
     const firstStop = route.stops[0]
+    if (!firstStop.estimatedArrival) return null;
+
     const [hours, minutes] = firstStop.estimatedArrival.split(':').map(Number)
-    
+
     const startTime = new Date(route.date)
     startTime.setHours(hours, minutes, 0, 0)
-    
+
     return startTime
   }
 

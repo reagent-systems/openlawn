@@ -100,7 +100,11 @@ export function groupNearbyEmployees<T extends {
     groups.push(group)
   })
 
-  return groups
+  return groups as Array<{
+    type: 'group' | 'individual'
+    employees: T[]
+    centerLocation?: { lat: number; lng: number }
+  }>
 }
 
 // Check if two locations are within a specified distance

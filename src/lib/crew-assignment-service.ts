@@ -130,14 +130,17 @@ export const validateCrewAssignment = (
   if (!assignment.crewId) {
     errors.push('Crew ID is required');
   }
-  
-  if (!assignment.serviceType) {
-    errors.push('Service type is required');
+
+  if (!assignment.serviceTypes || assignment.serviceTypes.length === 0) {
+    errors.push('At least one service type is required');
   }
-  
+
   const validServiceTypes = getAvailableServiceTypes();
-  if (!validServiceTypes.includes(assignment.serviceType)) {
-    errors.push(`Invalid service type. Must be one of: ${validServiceTypes.join(', ')}`);
+  if (assignment.serviceTypes) {
+    const invalidTypes = assignment.serviceTypes.filter(type => !validServiceTypes.includes(type));
+    if (invalidTypes.length > 0) {
+      errors.push(`Invalid service types: ${invalidTypes.join(', ')}. Must be one of: ${validServiceTypes.join(', ')}`);
+    }
   }
   
   return {

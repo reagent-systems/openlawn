@@ -222,23 +222,23 @@ export const generateRoutesForNext48Hours = async (): Promise<SimpleRoute[]> => 
   // Generate routes for each crew
   const routes: SimpleRoute[] = [];
   const today = new Date();
-  
-  crewAssignments.forEach((customerNeeds, crewId) => {
-    if (customerNeeds.length === 0) return;
-    
+
+  for (const [crewId, customerNeeds] of crewAssignments.entries()) {
+    if (customerNeeds.length === 0) continue;
+
     // Limit to 12 customers per crew per day
     const limitedCustomers = customerNeeds.slice(0, 12).map(need => need.customer);
-    
+
     // Optimize route
     const { customers: optimizedCustomers, totalDistance } = await optimizeRoute(limitedCustomers);
-    
+
     // Calculate estimated duration (30 minutes per customer + travel time)
     const estimatedDuration = optimizedCustomers.length * 30 + Math.ceil(totalDistance * 5); // 5 min per mile
-    
+
     // Get crew members
     const crewMembers = crews.get(crewId)!;
     const crewName = crewId; // Use crew ID as name for now
-    
+
     routes.push({
       crewId,
       crewName,
@@ -248,7 +248,7 @@ export const generateRoutesForNext48Hours = async (): Promise<SimpleRoute[]> => 
       totalDistance,
       crewMembers
     });
-  });
+  }
   
   return routes;
 };
