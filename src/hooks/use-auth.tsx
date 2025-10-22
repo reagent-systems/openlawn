@@ -16,7 +16,14 @@ import type { User } from '@/lib/firebase-types';
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, displayName?: string, role?: 'employee' | 'manager' | 'admin') => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    displayName?: string,
+    role?: 'employee' | 'manager' | 'admin',
+    companyName?: string,
+    companyId?: string
+  ) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   clearError: () => void;
@@ -106,10 +113,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, displayName?: string, role?: 'employee' | 'manager' | 'admin') => {
+  const signUp = async (
+    email: string,
+    password: string,
+    displayName?: string,
+    role?: 'employee' | 'manager' | 'admin',
+    companyName?: string,
+    companyId?: string
+  ) => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
     try {
-      await signUpWithEmail(email, password, displayName, role);
+      await signUpWithEmail(email, password, displayName, role, companyName, companyId);
     } catch (error: any) {
       const errorMessage = getAuthErrorMessage(error.code);
       setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));

@@ -14,9 +14,9 @@ import { getTSPOptimizationService } from './tsp-optimization-service';
 // Route cache for daily routes
 const routeCache = new Map<string, DailyRoute>();
 
-// Get available crews for a specific date
-export const getAvailableCrews = async (date: Date): Promise<CrewAvailability[]> => {
-  const users = await getUsers();
+// Get available crews for a specific date within a company
+export const getAvailableCrews = async (companyId: string, date: Date): Promise<CrewAvailability[]> => {
+  const users = await getUsers(companyId);
   const dayOfWeek = getDayOfWeek(date);
   console.log(`getAvailableCrews - Checking availability for ${dayOfWeek}:`, users.length, 'total users');
   
@@ -145,12 +145,13 @@ export const assignClustersToCrews = (
 
 // Optimize route for a crew using TSP optimization
 export const optimizeRouteForCrew = async (
+  companyId: string,
   crew: CrewAvailability,
   customers: CustomerPriority[],
   date: Date
 ): Promise<DailyRoute> => {
   // Get all customers to match with priorities
-  const allCustomers = await getCustomers();
+  const allCustomers = await getCustomers(companyId);
 
   // Filter customers by crew service types and get full customer data
   const compatibleCustomers = customers
@@ -179,6 +180,7 @@ export const optimizeRouteForCrew = async (
 
   if (limitedCustomers.length === 0) {
     return {
+      companyId, // REQUIRED: Multi-tenant isolation
       crewId: crew.crewId,
       date,
       customers: [],
@@ -202,6 +204,7 @@ export const optimizeRouteForCrew = async (
     });
 
     return {
+      companyId, // REQUIRED: Multi-tenant isolation
       crewId: crew.crewId,
       date,
       customers: optimizationResult.optimizedCustomers,
@@ -219,6 +222,7 @@ export const optimizeRouteForCrew = async (
     }));
 
     return {
+      companyId, // REQUIRED: Multi-tenant isolation
       crewId: crew.crewId,
       date,
       customers: limitedCustomers,
@@ -243,20 +247,20 @@ const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: numbe
 };
 
 // Generate simple routes for a specific date based on your intended system
-export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> => {
-  console.log('generateOptimalRoutes called for date:', date);
-  
+export const generateOptimalRoutes = async (companyId: string, date: Date): Promise<DailyRoute[]> => {
+  console.log('generateOptimalRoutes called for companyId:', companyId, 'date:', date);
+
   // Step 1: Get available crews (employees with schedules for this day)
-  const availableCrews = await getAvailableCrews(date);
+  const availableCrews = await getAvailableCrews(companyId, date);
   console.log('Available crews:', availableCrews.length);
-  
+
   if (availableCrews.length === 0) {
     console.log('No available crews, returning empty array');
     return [];
   }
-  
+
   // Step 2: Get all customers who want service on this day
-  const allCustomers = await getCustomers();
+  const allCustomers = await getCustomers(companyId);
   const dayOfWeek = getDayOfWeek(date);
   
   const customersWantingService = allCustomers.filter(customer => {
@@ -311,6 +315,7 @@ export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> =
         });
 
         const route: DailyRoute = {
+          companyId, // REQUIRED: Multi-tenant isolation
           crewId: crew.crewId,
           date,
           customers: optimizationResult.optimizedCustomers, // ← OPTIMIZED order!
@@ -327,6 +332,7 @@ export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> =
 
         // Fallback to original order if TSP fails
         const route: DailyRoute = {
+          companyId, // REQUIRED: Multi-tenant isolation
           crewId: crew.crewId,
           date,
           customers: assignedCustomers,
@@ -346,23 +352,23 @@ export const generateOptimalRoutes = async (date: Date): Promise<DailyRoute[]> =
   return routes;
 };
 
-// Get cached route for a crew on a specific date
-export const getCachedRoute = async (crewId: string, date: Date): Promise<DailyRoute | null> => {
-  const cacheKey = `${crewId}-${date.toISOString().split('T')[0]}`;
-  
+// Get cached route for a crew on a specific date within a company
+export const getCachedRoute = async (companyId: string, crewId: string, date: Date): Promise<DailyRoute | null> => {
+  const cacheKey = `${companyId}-${crewId}-${date.toISOString().split('T')[0]}`;
+
   if (routeCache.has(cacheKey)) {
     return routeCache.get(cacheKey)!;
   }
-  
+
   // Generate new route
-  const routes = await generateOptimalRoutes(date);
+  const routes = await generateOptimalRoutes(companyId, date);
   const crewRoute = routes.find(route => route.crewId === crewId);
-  
+
   if (crewRoute) {
     routeCache.set(cacheKey, crewRoute);
     return crewRoute;
   }
-  
+
   return null;
 };
 
@@ -373,25 +379,26 @@ export const clearRouteCache = (): void => {
 
 // Update route for traffic changes
 export const updateRouteForTraffic = async (
-  crewId: string, 
+  companyId: string,
+  crewId: string,
   currentLocation: { lat: number; lng: number }
 ): Promise<DailyRoute | null> => {
   const today = new Date();
-  const existingRoute = await getCachedRoute(crewId, today);
-  
+  const existingRoute = await getCachedRoute(companyId, crewId, today);
+
   if (!existingRoute) {
     return null;
   }
-  
+
   // Re-optimize route with current location
-  const remainingCustomers = existingRoute.customers.filter(customer => 
+  const remainingCustomers = existingRoute.customers.filter(customer =>
     !customer.services.some(service => service.status === 'completed')
   );
-  
+
   if (remainingCustomers.length === 0) {
     return existingRoute;
   }
-  
+
   // Create new crew availability with current location
   const crew: CrewAvailability = {
     crewId: existingRoute.crewId,
@@ -407,7 +414,7 @@ export const updateRouteForTraffic = async (
     capabilities: ['general'],
     region: 'default',
   };
-  
+
   // Re-optimize route
   const customerPriorities = remainingCustomers.map(customer => ({
     customerId: customer.id,
@@ -419,68 +426,68 @@ export const updateRouteForTraffic = async (
       location: { lat: customer.lat, lng: customer.lng, zipCode: '' },
     },
   }));
-  
-  const updatedRoute = await optimizeRouteForCrew(crew, customerPriorities, today);
-  
+
+  const updatedRoute = await optimizeRouteForCrew(companyId, crew, customerPriorities, today);
+
   // Update cache
-  const cacheKey = `${crewId}-${today.toISOString().split('T')[0]}`;
+  const cacheKey = `${companyId}-${crewId}-${today.toISOString().split('T')[0]}`;
   routeCache.set(cacheKey, updatedRoute);
-  
+
   return updatedRoute;
 };
 
-// Get all routes for a specific date
-export const getAllRoutesForDate = async (date: Date): Promise<DailyRoute[]> => {
-  const routes = await generateOptimalRoutes(date);
-  
+// Get all routes for a specific date within a company
+export const getAllRoutesForDate = async (companyId: string, date: Date): Promise<DailyRoute[]> => {
+  const routes = await generateOptimalRoutes(companyId, date);
+
   // Cache all routes
   routes.forEach(route => {
-    const cacheKey = `${route.crewId}-${date.toISOString().split('T')[0]}`;
+    const cacheKey = `${companyId}-${route.crewId}-${date.toISOString().split('T')[0]}`;
     routeCache.set(cacheKey, route);
   });
-  
+
   return routes;
 }; 
 
 // Get customers assigned to a specific employee for today and tomorrow
-export const getEmployeeAssignedCustomers = async (employeeId: string): Promise<Customer[]> => {
-  console.log('getEmployeeAssignedCustomers called for employeeId:', employeeId);
-  
-  const users = await getUsers();
+export const getEmployeeAssignedCustomers = async (companyId: string, employeeId: string): Promise<Customer[]> => {
+  console.log('getEmployeeAssignedCustomers called for companyId:', companyId, 'employeeId:', employeeId);
+
+  const users = await getUsers(companyId);
   const employee = users.find(user => user.id === employeeId);
-  
+
   console.log('Employee found:', employee);
   console.log('Employee crewId:', employee?.crewId);
-  
+
   if (!employee || !employee.crewId) {
     console.log('No employee or crewId found, returning empty array');
     return [];
   }
-  
+
   // Get all customers
-  const allCustomers = await getCustomers();
+  const allCustomers = await getCustomers(companyId);
   console.log('All customers:', allCustomers.length);
-  
+
   // Get routes for today and tomorrow
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  
+
   console.log('Generating routes for today and tomorrow...');
-  const todayRoutes = await generateOptimalRoutes(today);
-  const tomorrowRoutes = await generateOptimalRoutes(tomorrow);
-  
+  const todayRoutes = await generateOptimalRoutes(companyId, today);
+  const tomorrowRoutes = await generateOptimalRoutes(companyId, tomorrow);
+
   console.log('Today routes:', todayRoutes.length);
   console.log('Tomorrow routes:', tomorrowRoutes.length);
-  
+
   // Find routes for this employee's crew
-  const crewRoutes = [...todayRoutes, ...tomorrowRoutes].filter(route => 
+  const crewRoutes = [...todayRoutes, ...tomorrowRoutes].filter(route =>
     route.crewId === employee.crewId
   );
-  
+
   console.log('Routes for employee crew:', crewRoutes.length);
   console.log('Crew routes:', crewRoutes);
-  
+
   // Get all customers from these routes
   const assignedCustomerIds = new Set<string>();
   crewRoutes.forEach(route => {
@@ -488,23 +495,25 @@ export const getEmployeeAssignedCustomers = async (employeeId: string): Promise<
       assignedCustomerIds.add(customer.id);
     });
   });
-  
+
   console.log('Assigned customer IDs:', Array.from(assignedCustomerIds));
-  
+
   // Return customers assigned to this employee's crew
   const assignedCustomers = allCustomers.filter(customer => assignedCustomerIds.has(customer.id));
   console.log('Final assigned customers:', assignedCustomers.length);
-  
+
   return assignedCustomers;
 }; 
 
 // Generate Google Directions API route for a crew
 export const generateGoogleDirectionsRoute = async (
+  companyId: string,
   crew: CrewAvailability,
   customers: Customer[]
 ): Promise<DailyRoute> => {
   if (customers.length === 0) {
     return {
+      companyId, // REQUIRED: Multi-tenant isolation
       crewId: crew.crewId,
       date: crew.availability.date,
       customers: [],
@@ -549,6 +558,7 @@ export const generateGoogleDirectionsRoute = async (
     const estimatedDuration = customers.length * 30; // 30 minutes per customer
 
     return {
+      companyId, // REQUIRED: Multi-tenant isolation
       crewId: crew.crewId,
       date: crew.availability.date,
       customers,
@@ -558,7 +568,7 @@ export const generateGoogleDirectionsRoute = async (
     };
   } catch (error) {
     console.error('Error generating Google Directions route:', error);
-    
+
     // Fallback to simple path
     const optimizedPath = customers.map(customer => ({
       lat: customer.lat,
@@ -566,6 +576,7 @@ export const generateGoogleDirectionsRoute = async (
     }));
 
     return {
+      companyId, // REQUIRED: Multi-tenant isolation
       crewId: crew.crewId,
       date: crew.availability.date,
       customers,

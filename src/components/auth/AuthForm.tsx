@@ -36,6 +36,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
     confirmPassword: '',
     displayName: '',
     role: 'employee' as 'admin' | 'employee' | 'manager',
+    companyName: '',
   });
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -76,6 +77,16 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
       return;
     }
 
+    // Require company name for admin/manager roles
+    if ((signUpData.role === 'admin' || signUpData.role === 'manager') && !signUpData.companyName) {
+      toast({
+        title: "Error",
+        description: "Company name is required for admin/manager accounts",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (signUpData.password !== signUpData.confirmPassword) {
       toast({
         title: "Error",
@@ -95,7 +106,13 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
     }
 
     try {
-      await signUp(signUpData.email, signUpData.password, signUpData.displayName, signUpData.role);
+      await signUp(
+        signUpData.email,
+        signUpData.password,
+        signUpData.displayName,
+        signUpData.role,
+        signUpData.companyName || undefined
+      );
       toast({
         title: "Success",
         description: "Account created successfully",
@@ -232,6 +249,23 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
                   <option value="admin">Admin</option>
                 </select>
               </div>
+
+              {(signUpData.role === 'admin' || signUpData.role === 'manager') && (
+                <div className="space-y-2">
+                  <Label htmlFor="signup-company">Company Name</Label>
+                  <Input
+                    id="signup-company"
+                    type="text"
+                    placeholder="Enter your company name"
+                    value={signUpData.companyName}
+                    onChange={(e) => setSignUpData({ ...signUpData, companyName: e.target.value })}
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    This will create a new company for your business
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="signup-password">Password</Label>

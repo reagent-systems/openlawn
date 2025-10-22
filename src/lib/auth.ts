@@ -1,4 +1,4 @@
-import { 
+import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
@@ -11,6 +11,7 @@ import {
 import { getFirebaseAuth, getFirebaseDb } from './firebase';
 import { doc, setDoc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import type { User } from './firebase-types';
+import { createCompany } from './company-service';
 
 // Authentication state interface
 export interface AuthState {
@@ -21,13 +22,18 @@ export interface AuthState {
 }
 
 // Create user profile in Firestore
-const createUserProfile = async (user: FirebaseUser, additionalData?: Partial<User>): Promise<void> => {
+const createUserProfile = async (user: FirebaseUser, companyId: string, additionalData?: Partial<User>): Promise<void> => {
   const db = getFirebaseDb();
   if (!db) {
     throw new Error('Firebase database not initialized');
   }
 
+  if (!companyId) {
+    throw new Error('Company ID is required to create user profile');
+  }
+
   const userProfile: Record<string, any> = {
+    companyId, // REQUIRED: Multi-tenant isolation
     name: user.displayName || '',
     email: user.email || '',
     phone: '',
@@ -111,6 +117,7 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
       const data = userDoc.data();
       return {
         id: userDoc.id,
+        companyId: data.companyId, // REQUIRED: Multi-tenant isolation
         name: data.name,
         email: data.email,
         phone: data.phone,
@@ -121,6 +128,11 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
         status: data.status || 'available',
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
+        displayName: data.displayName,
+        photoURL: data.photoURL,
+        isActive: data.isActive,
+        notes: data.notes,
+        title: data.title,
       };
     }
     return null;
@@ -132,10 +144,12 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
 
 // Sign up with email and password
 export const signUpWithEmail = async (
-  email: string, 
-  password: string, 
+  email: string,
+  password: string,
   displayName?: string,
-  role?: 'employee' | 'manager' | 'admin'
+  role?: 'employee' | 'manager' | 'admin',
+  companyName?: string,
+  companyId?: string
 ): Promise<UserCredential> => {
   try {
     const auth = getFirebaseAuth();
@@ -144,16 +158,35 @@ export const signUpWithEmail = async (
     }
 
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    
+
     // Update display name if provided
     if (displayName) {
       await updateProfile(userCredential.user, { displayName });
     }
 
+    // Handle company assignment
+    let finalCompanyId = companyId;
+    const userRole = role || 'employee';
+
+    // If no companyId provided and user is admin/manager, create a new company
+    if (!finalCompanyId && (userRole === 'admin' || userRole === 'manager')) {
+      const defaultCompanyName = companyName || `${displayName || email}'s Company`;
+      finalCompanyId = await createCompany({
+        name: defaultCompanyName,
+        owner: userCredential.user.uid,
+        isActive: true,
+      });
+    }
+
+    // Employees must have a companyId (should be provided via invite)
+    if (!finalCompanyId) {
+      throw new Error('Company ID is required for employee registration. Please use an invite link.');
+    }
+
     // Create user profile in Firestore
-    await createUserProfile(userCredential.user, { 
+    await createUserProfile(userCredential.user, finalCompanyId, {
       name: displayName || '',
-      role: role || 'employee'
+      role: userRole,
     });
 
     return userCredential;
