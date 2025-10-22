@@ -75,23 +75,23 @@ export const updateUserTitle = async (
 /**
  * Get all users in a specific crew
  */
-export const getCrewMembers = async (crewId: string): Promise<User[]> => {
+export const getCrewMembers = async (companyId: string, crewId: string): Promise<User[]> => {
   const { getUsers } = await import('./user-service');
-  const allUsers = await getUsers();
+  const allUsers = await getUsers(companyId);
   return allUsers.filter(user => user.crewId === crewId);
 };
 
 /**
  * Get all crews (unique crewIds with their service types)
  */
-export const getAllCrews = async (): Promise<Array<{
+export const getAllCrews = async (companyId: string): Promise<Array<{
   crewId: string;
   serviceType: string;
   memberCount: number;
   manager?: User;
 }>> => {
   const { getUsers } = await import('./user-service');
-  const allUsers = await getUsers();
+  const allUsers = await getUsers(companyId);
   
   const crewMap = new Map<string, {
     crewId: string;

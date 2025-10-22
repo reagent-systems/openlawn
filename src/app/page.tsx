@@ -136,14 +136,14 @@ export default function LawnRoutePage() {
       // Employees: Use subscription for real-time updates, then filter to assigned customers
       let isActive = true;
 
-      const unsubscribeCustomers = subscribeToCustomers(userProfile.companyId, async (allCustomers) => {
+      const unsubscribeCustomers = subscribeToCustomers(userProfile.companyId!, async (allCustomers) => {
         if (!isActive) return;
 
         try {
           // Import the service to get assigned customers
           // This includes both customers they created AND customers in their crew routes
           const { getEmployeeAssignedCustomers } = await import('@/lib/route-service');
-          const assignedCustomers = await getEmployeeAssignedCustomers(userProfile.companyId, userProfile.id);
+          const assignedCustomers = await getEmployeeAssignedCustomers(userProfile.companyId!, userProfile.id);
 
           if (isActive) {
             console.log('Employee: Real-time update - showing', assignedCustomers.length, 'assigned customers');
@@ -196,8 +196,8 @@ export default function LawnRoutePage() {
         const tomorrow = new Date(today)
         tomorrow.setDate(tomorrow.getDate() + 1)
 
-        const todayRoutes = await generateOptimalRoutes(userProfile.companyId, today)
-        const tomorrowRoutes = await generateOptimalRoutes(userProfile.companyId, tomorrow)
+        const todayRoutes = await generateOptimalRoutes(userProfile.companyId!, today)
+        const tomorrowRoutes = await generateOptimalRoutes(userProfile.companyId!, tomorrow)
         
         // Combine routes by crew, showing today's routes as primary
         const crewRoutes = new Map<string, DailyRoute>();
@@ -645,7 +645,7 @@ export default function LawnRoutePage() {
             </p>
             <ol className="text-sm space-y-1 list-decimal list-inside">
               <li>Share your company name: <span className="font-semibold bg-white px-2 py-0.5 rounded">{companyName || 'Loading...'}</span></li>
-              <li>Have them sign up and select "Employee" role</li>
+              <li>Have them sign up and select &quot;Employee&quot; role</li>
               <li>They enter your exact company name to join</li>
             </ol>
           </div>

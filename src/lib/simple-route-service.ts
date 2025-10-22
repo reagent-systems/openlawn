@@ -25,8 +25,8 @@ export interface CustomerNeed {
 }
 
 // Get customers that need service in the next 48 hours
-export const getCustomersNeedingService = async (): Promise<CustomerNeed[]> => {
-  const customers = await getCustomers();
+export const getCustomersNeedingService = async (companyId: string): Promise<CustomerNeed[]> => {
+  const customers = await getCustomers(companyId);
   const now = new Date();
   const twoDaysFromNow = new Date(now.getTime() + 48 * 60 * 60 * 1000);
   
@@ -56,8 +56,8 @@ export const getCustomersNeedingService = async (): Promise<CustomerNeed[]> => {
 };
 
 // Get available crews for today and tomorrow
-export const getAvailableCrewsForNext48Hours = async (): Promise<Map<string, User[]>> => {
-  const users = await getUsers();
+export const getAvailableCrewsForNext48Hours = async (companyId: string): Promise<Map<string, User[]>> => {
+  const users = await getUsers(companyId);
   const crews = new Map<string, User[]>();
   
   // Group users by crewId
@@ -205,12 +205,12 @@ const optimizeRoute = async (customers: Customer[]): Promise<{ customers: Custom
 };
 
 // Generate routes for the next 48 hours
-export const generateRoutesForNext48Hours = async (): Promise<SimpleRoute[]> => {
+export const generateRoutesForNext48Hours = async (companyId: string): Promise<SimpleRoute[]> => {
   // Get customers needing service
-  const customersNeedingService = await getCustomersNeedingService();
-  
+  const customersNeedingService = await getCustomersNeedingService(companyId);
+
   // Get available crews
-  const crews = await getAvailableCrewsForNext48Hours();
+  const crews = await getAvailableCrewsForNext48Hours(companyId);
   
   if (crews.size === 0 || customersNeedingService.length === 0) {
     return [];
@@ -254,14 +254,14 @@ export const generateRoutesForNext48Hours = async (): Promise<SimpleRoute[]> => 
 };
 
 // Get cached route or generate new one
-export const getRouteForCrew = async (crewId: string): Promise<SimpleRoute | null> => {
+export const getRouteForCrew = async (companyId: string, crewId: string): Promise<SimpleRoute | null> => {
   const cacheKey = `${crewId}-${new Date().toISOString().split('T')[0]}`;
-  
+
   if (routeCache.has(cacheKey)) {
     return routeCache.get(cacheKey);
   }
-  
-  const routes = await generateRoutesForNext48Hours();
+
+  const routes = await generateRoutesForNext48Hours(companyId);
   const crewRoute = routes.find(route => route.crewId === crewId);
   
   if (crewRoute) {

@@ -32,18 +32,21 @@ export interface ScheduleGenerationOptions {
 export class AutoScheduleGenerator {
   private customers: Customer[] = [];
   private crews: Map<string, User[]> = new Map();
+  private companyId: string;
 
-  constructor() {}
+  constructor(companyId: string) {
+    this.companyId = companyId;
+  }
 
   /**
    * Initialize the generator with current data
    */
   async initialize(): Promise<void> {
-    // Get all active customers
-    this.customers = await getCustomers();
-    
-    // Get all crews and their members
-    const allUsers = await getUsersByCrew();
+    // Get all active customers for this company
+    this.customers = await getCustomers(this.companyId);
+
+    // Get all crews and their members for this company
+    const allUsers = await getUsersByCrew(this.companyId);
     allUsers.forEach((crewMembers, crewId) => {
       this.crews.set(crewId, crewMembers);
     });
@@ -332,5 +335,7 @@ export class AutoScheduleGenerator {
   }
 }
 
-// Export singleton instance
-export const autoScheduleGenerator = new AutoScheduleGenerator(); 
+// Factory function to create a new generator for a specific company
+export const createAutoScheduleGenerator = (companyId: string) => {
+  return new AutoScheduleGenerator(companyId);
+}; 
