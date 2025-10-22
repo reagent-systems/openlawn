@@ -22,24 +22,30 @@ export interface AuthState {
 }
 
 // Create user profile in Firestore
-const createUserProfile = async (user: FirebaseUser, companyId: string, additionalData?: Partial<User>): Promise<void> => {
+const createUserProfile = async (user: FirebaseUser, companyId: string | undefined, additionalData?: Partial<User>): Promise<void> => {
   const db = getFirebaseDb();
   if (!db) {
     throw new Error('Firebase database not initialized');
   }
 
-  if (!companyId) {
-    throw new Error('Company ID is required to create user profile');
+  // Only admins can have undefined companyId (super-admins)
+  const isAdmin = additionalData?.role === 'admin';
+  if (!companyId && !isAdmin) {
+    throw new Error('Company ID is required for non-admin users');
   }
 
   const userProfile: Record<string, any> = {
-    companyId, // REQUIRED: Multi-tenant isolation
     name: user.displayName || '',
     email: user.email || '',
     phone: '',
     role: 'employee', // Default role
     status: 'available',
   };
+
+  // Only add companyId if it exists (admins don't have one)
+  if (companyId) {
+    userProfile.companyId = companyId;
+  }
 
   // Add additional data, filtering out undefined values
   if (additionalData) {
@@ -118,7 +124,7 @@ export const getUserProfile = async (uid: string, retries = 3): Promise<User | n
         const data = userDoc.data();
         return {
           id: userDoc.id,
-          companyId: data.companyId, // REQUIRED: Multi-tenant isolation
+          companyId: data.companyId, // Optional for admins (super-admins see all companies)
           name: data.name,
           email: data.email,
           phone: data.phone,
@@ -179,8 +185,11 @@ export const signUpWithEmail = async (
     const userRole = role || 'employee';
 
     if (!finalCompanyId) {
-      if (userRole === 'admin' || userRole === 'manager') {
-        // Admin/Manager: Create a new company
+      if (userRole === 'admin') {
+        // Admin: No company assignment - they are super-admins who see ALL companies
+        finalCompanyId = undefined;
+      } else if (userRole === 'manager') {
+        // Manager: Create a new company
         const defaultCompanyName = companyName || `${displayName || email}'s Company`;
         finalCompanyId = await createCompany({
           name: defaultCompanyName,

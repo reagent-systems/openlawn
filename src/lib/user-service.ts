@@ -16,6 +16,17 @@ import {
 import { db } from './firebase';
 import type { User } from './firebase-types';
 
+// Get ALL users across all companies (admin only)
+export const getAllUsers = async (): Promise<User[]> => {
+  const q = query(collection(db, 'users'), orderBy('name'));
+  const querySnapshot = await getDocs(q);
+
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  })) as User[];
+};
+
 // Get all users for a company
 export const getUsers = async (companyId: string): Promise<User[]> => {
   const q = query(
@@ -236,6 +247,19 @@ export const subscribeToUsers = (
     where('companyId', '==', companyId),
     orderBy('name')
   );
+  return onSnapshot(q, (querySnapshot) => {
+    const users = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as User[];
+    callback(users);
+  });
+};
+
+export const subscribeToAllUsers = (
+  callback: (users: User[]) => void
+) => {
+  const q = query(collection(db, 'users'), orderBy('name'));
   return onSnapshot(q, (querySnapshot) => {
     const users = querySnapshot.docs.map(doc => ({
       id: doc.id,

@@ -44,7 +44,7 @@ export interface Company extends BaseDocument {
 
 // Updated User model with route optimization roles
 export interface User extends BaseDocument {
-  companyId: string; // REQUIRED: Company this user belongs to (multi-tenant isolation)
+  companyId?: string; // Company this user belongs to (optional for admins - they see ALL companies)
   name: string;
   email: string;
   phone?: string;

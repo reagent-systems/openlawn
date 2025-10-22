@@ -17,8 +17,8 @@ import { CompanySettingsSheet } from "@/components/lawn-route/CompanySettingsShe
 import { Header } from "@/components/lawn-route/Header"
 import { Button } from "@/components/ui/button"
 import { Plus, User as UserIcon, Users, Building2, Settings } from "lucide-react"
-import { subscribeToCustomers, addCustomer } from "@/lib/customer-service"
-import { subscribeToUsers } from "@/lib/user-service"
+import { subscribeToCustomers, subscribeToAllCustomers, addCustomer } from "@/lib/customer-service"
+import { subscribeToUsers, subscribeToAllUsers } from "@/lib/user-service"
 import { generateOptimalRoutes, getCachedRoute } from "@/lib/route-service"
 import type { Customer, User as FirebaseUser, DailyRoute, User } from "@/lib/firebase-types"
 import { googleMapsConfig } from "@/lib/env"
@@ -80,10 +80,12 @@ export default function LawnRoutePage() {
   // Minimum swipe distance
   const minSwipeDistance = 30
 
-  const isManager = userProfile?.role === 'manager' || userProfile?.role === 'admin'
+  const isAdmin = userProfile?.role === 'admin'
+  const isManager = userProfile?.role === 'manager' || isAdmin
 
   // Debug logging
   console.log('User Profile:', userProfile)
+  console.log('Is Admin:', isAdmin)
   console.log('Is Manager:', isManager)
 
   // Fetch company name and base location
@@ -109,11 +111,21 @@ export default function LawnRoutePage() {
     fetchCompanyData();
   }, [userProfile])
 
-  // Subscribe to customers (managers see all, employees see assigned)
+  // Subscribe to customers (admins see all, managers see company, employees see assigned)
   useEffect(() => {
-    if (!userProfile?.companyId) return
+    if (!userProfile) return
 
-    if (isManager) {
+    if (isAdmin) {
+      // Admins see ALL customers across all companies (real-time subscription)
+      const unsubscribeCustomers = subscribeToAllCustomers((customers) => {
+        console.log('Admin: All customers updated via subscription:', customers.length);
+        setCustomers(customers)
+      })
+      return () => unsubscribeCustomers()
+    } else if (!userProfile.companyId) {
+      // Non-admin users must have a companyId
+      return
+    } else if (isManager) {
       // Managers see all customers in their company (real-time subscription)
       const unsubscribeCustomers = subscribeToCustomers(userProfile.companyId, (customers) => {
         console.log('Manager: Customers updated via subscription:', customers.length);
@@ -152,22 +164,31 @@ export default function LawnRoutePage() {
         unsubscribeCustomers();
       };
     }
-  }, [userProfile, isManager])
+  }, [userProfile, isManager, isAdmin])
 
-  // Subscribe to users (for manager view)
+  // Subscribe to users (for manager and admin view)
   useEffect(() => {
-    if (!isManager || !userProfile?.companyId) return
+    if (!isManager || !userProfile) return
 
-    const unsubscribeUsers = subscribeToUsers(userProfile.companyId, (users) => {
-      setUsers(users)
-    })
+    if (isAdmin) {
+      // Admins see ALL users across all companies
+      const unsubscribeUsers = subscribeToAllUsers((users) => {
+        console.log('Admin: All users updated via subscription:', users.length);
+        setUsers(users)
+      })
+      return () => unsubscribeUsers()
+    } else if (userProfile.companyId) {
+      // Managers see users in their company
+      const unsubscribeUsers = subscribeToUsers(userProfile.companyId, (users) => {
+        setUsers(users)
+      })
+      return () => unsubscribeUsers()
+    }
+  }, [isManager, isAdmin, userProfile])
 
-    return () => unsubscribeUsers()
-  }, [isManager, userProfile])
-
-  // Generate routes for today and tomorrow
+  // Generate routes for today and tomorrow (skip for admins who don't have a company)
   useEffect(() => {
-    if (!userProfile?.companyId) return
+    if (!userProfile?.companyId || isAdmin) return
 
     const generateRoutes = async () => {
       try {
@@ -764,45 +785,82 @@ export default function LawnRoutePage() {
   }
 
   // Render settings view
-  const renderSettingsView = () => (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold flex items-center gap-2">
-          <Settings className="w-5 h-5" />
-          Company Settings
-        </h2>
-      </div>
+  const renderSettingsView = () => {
+    if (isAdmin) {
+      // Admins don't have company-specific settings
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Admin Settings
+            </h2>
+          </div>
 
-      <div className="space-y-4 p-4">
-        {/* Company Info */}
-        <div className="p-4 border rounded-lg bg-card">
-          <h3 className="font-semibold mb-2">Company Information</h3>
-          <div className="space-y-2 text-sm">
-            <div>
-              <span className="text-muted-foreground">Company Name:</span>
-              <span className="ml-2 font-medium">{companyName || 'Loading...'}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground">Home Base:</span>
-              <span className="ml-2 font-medium">
-                {baseLocation ? baseLocation.address : 'Not set'}
-              </span>
+          <div className="space-y-4 p-4">
+            <div className="p-4 border rounded-lg bg-card">
+              <h3 className="font-semibold mb-2">Admin Account</h3>
+              <div className="space-y-2 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Role:</span>
+                  <span className="ml-2 font-medium">Super Administrator</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Access Level:</span>
+                  <span className="ml-2 font-medium">All Companies</span>
+                </div>
+                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-md">
+                  <p className="text-sm text-blue-900 dark:text-blue-100">
+                    As an admin, you have access to view all customers, employees, and data across all companies. You are not associated with a specific company.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
+      );
+    }
 
-        {/* Set Home Base Button */}
-        <div
-          onClick={() => setIsCompanySettingsOpen(true)}
-          className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
-        >
-          <Settings className="w-10 h-10 mb-2" />
-          <p className="font-semibold">{baseLocation ? 'Update Home Base Location' : 'Set Home Base Location'}</p>
-          <p className="text-xs text-muted-foreground mt-1">Where crews start and end their day</p>
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Settings className="w-5 h-5" />
+            Company Settings
+          </h2>
+        </div>
+
+        <div className="space-y-4 p-4">
+          {/* Company Info */}
+          <div className="p-4 border rounded-lg bg-card">
+            <h3 className="font-semibold mb-2">Company Information</h3>
+            <div className="space-y-2 text-sm">
+              <div>
+                <span className="text-muted-foreground">Company Name:</span>
+                <span className="ml-2 font-medium">{companyName || 'Loading...'}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Home Base:</span>
+                <span className="ml-2 font-medium">
+                  {baseLocation ? baseLocation.address : 'Not set'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Set Home Base Button */}
+          <div
+            onClick={() => setIsCompanySettingsOpen(true)}
+            className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
+          >
+            <Settings className="w-10 h-10 mb-2" />
+            <p className="font-semibold">{baseLocation ? 'Update Home Base Location' : 'Set Home Base Location'}</p>
+            <p className="text-xs text-muted-foreground mt-1">Where crews start and end their day</p>
+          </div>
         </div>
       </div>
-    </div>
-  )
+    );
+  }
 
   // Handler to reload base location after update
   const handleLocationUpdated = async () => {

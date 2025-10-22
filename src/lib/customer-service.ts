@@ -75,6 +75,13 @@ const convertToFirestoreCustomer = (customer: Customer) => {
   return data;
 };
 
+// Get all customers across ALL companies (admin only)
+export const getAllCustomers = async (): Promise<Customer[]> => {
+  const customersRef = collection(db, 'customers');
+  const querySnapshot = await getDocs(customersRef);
+  return querySnapshot.docs.map(convertFirestoreCustomer);
+};
+
 // Get all customers for a company
 export const getCustomers = async (companyId: string): Promise<Customer[]> => {
   const customersRef = collection(db, 'customers');
@@ -126,6 +133,18 @@ export const updateCustomer = async (id: string, updates: Partial<Customer>): Pr
 export const deleteCustomer = async (id: string): Promise<void> => {
   const customerRef = doc(db, 'customers', id);
   await deleteDoc(customerRef);
+};
+
+// Subscribe to ALL customers across all companies (admin only)
+export const subscribeToAllCustomers = (
+  callback: (customers: Customer[]) => void
+): (() => void) => {
+  const customersRef = collection(db, 'customers');
+  const q = query(customersRef, orderBy('name'));
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    const customers = querySnapshot.docs.map(convertFirestoreCustomer);
+    callback(customers);
+  });
 };
 
 // Subscribe to customers for a company

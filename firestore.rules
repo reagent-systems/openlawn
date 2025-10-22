@@ -30,6 +30,12 @@ service cloud.firestore {
       return userData != null ? userData.companyId : null;
     }
 
+    // Check if user is an admin (super-admin with cross-company access)
+    function isAdmin() {
+      let userData = getUserData();
+      return isAuthenticated() && userData != null && userData.role == 'admin';
+    }
+
     // Check if user is manager or admin
     function isManagerOrAdmin() {
       let userData = getUserData();
@@ -54,8 +60,10 @@ service cloud.firestore {
 
     match /companies/{companyId} {
       // Company owners can read/write their own company
+      // Admins can read all companies
       // Also allow users without a profile yet to search for companies (during signup)
       allow read: if isAuthenticated() && (
+        isAdmin() ||
         resource.data.owner == request.auth.uid ||
         getUserCompanyId() == companyId ||
         !userExists()  // Allow reading during signup
@@ -78,10 +86,13 @@ service cloud.firestore {
       // Users can read/write their own profile
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
 
+      // Admins can read all users across all companies
+      allow read: if isAuthenticated() && isAdmin();
+
       // Users can read other users in the same company
       allow read: if isAuthenticated() && isSameCompany(resource.data);
 
-      // Managers and admins in the same company can read all users in their company
+      // Managers in the same company can read all users in their company
       allow read: if isAuthenticated() &&
         isManagerOrAdmin() &&
         isSameCompany(resource.data);
@@ -105,7 +116,10 @@ service cloud.firestore {
     // ========================================
 
     match /customers/{customerId} {
-      // CRITICAL: All customer access MUST be filtered by company
+      // CRITICAL: All customer access MUST be filtered by company (except for admins)
+
+      // Admins can read all customers across all companies
+      allow read: if isAuthenticated() && isAdmin();
 
       // Users can only read customers in their company
       allow read: if isAuthenticated() && isSameCompany(resource.data);
@@ -131,8 +145,8 @@ service cloud.firestore {
     // ========================================
 
     match /routes/{routeId} {
-      // Routes are company-specific
-      allow read: if isAuthenticated() && isSameCompany(resource.data);
+      // Routes are company-specific (admins can read all)
+      allow read: if isAuthenticated() && (isAdmin() || isSameCompany(resource.data));
 
       allow create: if isAuthenticated() && isSameCompanyOnCreate();
 
