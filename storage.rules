@@ -1,0 +1,85 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules for OpenLawn
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to get user role from Firestore
+    function getUserRole() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    // Helper function to check if user is manager or admin
+    function isManagerOrAdmin() {
+      let role = getUserRole();
+      return role == 'manager' || role == 'admin';
+    }
+
+    // Helper function to check if user created the customer
+    function isCustomerOwner(customerId) {
+      return firestore.get(/databases/(default)/documents/customers/$(customerId)).data.createdBy == request.auth.uid;
+    }
+
+    // Helper function to validate image file
+    function isValidImage() {
+      return request.resource.size < 10 * 1024 * 1024 // Max 10MB
+          && request.resource.contentType.matches('image/.*');
+    }
+
+    // Service photos folder listing: /customers/{customerId}/services/{serviceId}
+    match /customers/{customerId}/services/{serviceId}/{allPaths=**} {
+      // Allow list (read) if authenticated and (owner or manager/admin)
+      allow list, read: if isAuthenticated() &&
+                           (isCustomerOwner(customerId) || isManagerOrAdmin());
+    }
+
+    // Service photos: /customers/{customerId}/services/{serviceId}/{photoType}/{photoId}
+    // photoType: 'before' or 'after'
+    match /customers/{customerId}/services/{serviceId}/{photoType}/{photoId} {
+      // Allow read if authenticated and (owner or manager/admin)
+      allow read: if isAuthenticated() &&
+                     (isCustomerOwner(customerId) || isManagerOrAdmin());
+
+      // Allow upload if authenticated, valid image, and (owner or manager/admin)
+      allow create: if isAuthenticated() &&
+                       isValidImage() &&
+                       (photoType == 'before' || photoType == 'after') &&
+                       (isCustomerOwner(customerId) || isManagerOrAdmin());
+
+      // Allow update/delete only by managers/admins
+      allow update, delete: if isAuthenticated() && isManagerOrAdmin();
+    }
+
+    // Profile photos: /users/{userId}/profile/{photoId}
+    match /users/{userId}/profile/{photoId} {
+      // Users can read/write their own profile photos
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() &&
+                               (request.auth.uid == userId || isManagerOrAdmin()) &&
+                               isValidImage();
+      allow delete: if isAuthenticated() &&
+                       (request.auth.uid == userId || isManagerOrAdmin());
+    }
+
+    // Crew photos: /crews/{crewId}/{photoId}
+    match /crews/{crewId}/{photoId} {
+      // All authenticated users can read crew photos
+      allow read: if isAuthenticated();
+
+      // Only managers/admins can upload/delete crew photos
+      allow create, update, delete: if isAuthenticated() &&
+                                        isManagerOrAdmin() &&
+                                        isValidImage();
+    }
+
+    // Deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

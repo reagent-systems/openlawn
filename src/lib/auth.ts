@@ -27,17 +27,22 @@ const createUserProfile = async (user: FirebaseUser, additionalData?: Partial<Us
     throw new Error('Firebase database not initialized');
   }
 
-  const userProfile: Omit<User, 'id' | 'createdAt' | 'updatedAt'> = {
+  const userProfile: Record<string, any> = {
     name: user.displayName || '',
     email: user.email || '',
     phone: '',
     role: 'employee', // Default role
-    crewId: undefined,
-    schedule: undefined,
-    currentLocation: undefined,
     status: 'available',
-    ...additionalData
   };
+
+  // Add additional data, filtering out undefined values
+  if (additionalData) {
+    Object.entries(additionalData).forEach(([key, value]) => {
+      if (value !== undefined) {
+        userProfile[key] = value;
+      }
+    });
+  }
 
   await setDoc(doc(db, 'users', user.uid), {
     ...userProfile,
@@ -54,29 +59,36 @@ export const updateUserProfile = async (uid: string, updates: Partial<User>): Pr
   }
 
   const userRef = doc(db, 'users', uid);
-  
+
   // Check if document exists
   const userDoc = await getDoc(userRef);
-  
+
   if (userDoc.exists()) {
-    // Update existing document
+    // Update existing document - filter out undefined values
+    const cleanUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([_, value]) => value !== undefined)
+    );
     await updateDoc(userRef, {
-      ...updates,
+      ...cleanUpdates,
       updatedAt: Timestamp.now()
     });
   } else {
-    // Create new document with basic profile
-    const basicProfile: Omit<User, 'id' | 'createdAt' | 'updatedAt'> = {
+    // Create new document with basic profile - only include defined values
+    const basicProfile: Record<string, any> = {
       name: '',
       email: '',
       phone: '',
       role: 'employee',
-      crewId: undefined,
-      schedule: undefined,
-      currentLocation: undefined,
       status: 'available',
-      ...updates
     };
+
+    // Add updates, filtering out undefined values
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value !== undefined) {
+        basicProfile[key] = value;
+      }
+    });
+
     await setDoc(userRef, {
       ...basicProfile,
       createdAt: Timestamp.now(),
