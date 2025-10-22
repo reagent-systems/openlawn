@@ -9,7 +9,7 @@ import {
   UserCredential
 } from 'firebase/auth';
 import { getFirebaseAuth, getFirebaseDb } from './firebase';
-import { doc, setDoc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import type { User } from './firebase-types';
 import { createCompany } from './company-service';
 
@@ -103,8 +103,8 @@ export const updateUserProfile = async (uid: string, updates: Partial<User>): Pr
   }
 };
 
-// Get user profile from Firestore
-export const getUserProfile = async (uid: string): Promise<User | null> => {
+// Get user profile from Firestore with retry logic
+export const getUserProfile = async (uid: string, retries = 3): Promise<User | null> => {
   try {
     const db = getFirebaseDb();
     if (!db) {
@@ -112,29 +112,38 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
       return null;
     }
 
-    const userDoc = await getDoc(doc(db, 'users', uid));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      return {
-        id: userDoc.id,
-        companyId: data.companyId, // REQUIRED: Multi-tenant isolation
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        role: data.role || 'employee',
-        crewId: data.crewId,
-        schedule: data.schedule,
-        currentLocation: data.currentLocation,
-        status: data.status || 'available',
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        displayName: data.displayName,
-        photoURL: data.photoURL,
-        isActive: data.isActive,
-        notes: data.notes,
-        title: data.title,
-      };
+    for (let i = 0; i < retries; i++) {
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        return {
+          id: userDoc.id,
+          companyId: data.companyId, // REQUIRED: Multi-tenant isolation
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          role: data.role || 'employee',
+          crewId: data.crewId,
+          schedule: data.schedule,
+          currentLocation: data.currentLocation,
+          status: data.status || 'available',
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          displayName: data.displayName,
+          photoURL: data.photoURL,
+          isActive: data.isActive,
+          notes: data.notes,
+          title: data.title,
+        };
+      }
+
+      // If document doesn't exist yet, wait a bit and retry (for signup race condition)
+      if (i < retries - 1) {
+        console.log(`User profile not found, retrying... (${i + 1}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
+
     return null;
   } catch (error) {
     console.error('Error fetching user profile:', error);
@@ -153,8 +162,9 @@ export const signUpWithEmail = async (
 ): Promise<UserCredential> => {
   try {
     const auth = getFirebaseAuth();
-    if (!auth) {
-      throw new Error('Firebase auth not initialized');
+    const db = getFirebaseDb();
+    if (!auth || !db) {
+      throw new Error('Firebase not initialized');
     }
 
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -168,19 +178,38 @@ export const signUpWithEmail = async (
     let finalCompanyId = companyId;
     const userRole = role || 'employee';
 
-    // If no companyId provided and user is admin/manager, create a new company
-    if (!finalCompanyId && (userRole === 'admin' || userRole === 'manager')) {
-      const defaultCompanyName = companyName || `${displayName || email}'s Company`;
-      finalCompanyId = await createCompany({
-        name: defaultCompanyName,
-        owner: userCredential.user.uid,
-        isActive: true,
-      });
-    }
-
-    // Employees must have a companyId (should be provided via invite)
     if (!finalCompanyId) {
-      throw new Error('Company ID is required for employee registration. Please use an invite link.');
+      if (userRole === 'admin' || userRole === 'manager') {
+        // Admin/Manager: Create a new company
+        const defaultCompanyName = companyName || `${displayName || email}'s Company`;
+        finalCompanyId = await createCompany({
+          name: defaultCompanyName,
+          owner: userCredential.user.uid,
+          isActive: true,
+        });
+      } else if (userRole === 'employee' && companyName) {
+        // Employee: Find existing company by name (case-insensitive search)
+        const companiesRef = collection(db, 'companies');
+        const q = query(companiesRef, where('isActive', '==', true));
+        const querySnapshot = await getDocs(q);
+
+        // Normalize company name for comparison (trim and lowercase)
+        const normalizedSearchName = companyName.trim().toLowerCase();
+
+        // Find matching company (case-insensitive)
+        const matchingCompany = querySnapshot.docs.find(doc =>
+          doc.data().name.trim().toLowerCase() === normalizedSearchName
+        );
+
+        if (!matchingCompany) {
+          throw new Error(`Company "${companyName}" not found. Please check the name and try again, or contact your manager.`);
+        }
+
+        // Use the matching company
+        finalCompanyId = matchingCompany.id;
+      } else {
+        throw new Error('Company name is required.');
+      }
     }
 
     // Create user profile in Firestore
@@ -188,6 +217,9 @@ export const signUpWithEmail = async (
       name: displayName || '',
       role: userRole,
     });
+
+    // Small delay to ensure Firestore write propagates (especially important for emulators)
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     return userCredential;
   } catch (error) {

@@ -18,6 +18,11 @@ export interface Company extends BaseDocument {
   website?: string;
   logo?: string; // URL to company logo
   timezone?: string; // e.g., "America/New_York"
+  baseLocation?: { // Home base where crews start and end their day
+    lat: number;
+    lng: number;
+    address: string;
+  };
   settings?: {
     autoScheduling?: boolean;
     maxCustomersPerRoute?: number; // Default 12

@@ -48,7 +48,7 @@ const convertFirestoreCustomer = (doc: DocumentData): Customer => {
 
 // Convert Customer to Firestore document
 const convertToFirestoreCustomer = (customer: Customer) => {
-  return {
+  const data: any = {
     companyId: customer.companyId, // REQUIRED: Multi-tenant isolation
     name: customer.name,
     address: customer.address,
@@ -58,13 +58,21 @@ const convertToFirestoreCustomer = (customer: Customer) => {
     billingInfo: customer.billingInfo,
     status: customer.status,
     services: customer.services,
-    lastServiceDate: customer.lastServiceDate,
-    nextServiceDate: customer.nextServiceDate,
     createdBy: customer.createdBy,
     servicePreferences: customer.servicePreferences,
     serviceHistory: customer.serviceHistory,
     updatedAt: serverTimestamp(),
   };
+
+  // Only include optional timestamp fields if they have values
+  if (customer.lastServiceDate !== undefined) {
+    data.lastServiceDate = customer.lastServiceDate;
+  }
+  if (customer.nextServiceDate !== undefined) {
+    data.nextServiceDate = customer.nextServiceDate;
+  }
+
+  return data;
 };
 
 // Get all customers for a company

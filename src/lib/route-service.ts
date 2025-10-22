@@ -194,11 +194,25 @@ export const optimizeRouteForCrew = async (
   const tspService = getTSPOptimizationService(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '');
 
   try {
-    // Determine start location
-    const startLocation = crew.availability.currentLocation || { lat: 30.0997, lng: -81.7065 };
+    // Determine start location - prioritize company base location
+    let startLocation = { lat: 30.0997, lng: -81.7065 }; // Default fallback
+
+    // Try to get company's base location
+    const { getCompany } = await import('./company-service');
+    const company = await getCompany(companyId);
+    if (company?.baseLocation) {
+      startLocation = { lat: company.baseLocation.lat, lng: company.baseLocation.lng };
+      console.log('Using company base location:', startLocation);
+    } else if (crew.availability.currentLocation) {
+      startLocation = crew.availability.currentLocation;
+      console.log('Using crew current location:', startLocation);
+    } else {
+      console.log('Using default start location:', startLocation);
+    }
 
     const optimizationResult = await tspService.optimizeRoute(limitedCustomers, {
       startLocation,
+      endLocation: startLocation, // Crews return to the same base location
       optimizeFor: 'distance',
       travelMode: 'driving',
     });
@@ -459,46 +473,52 @@ export const getEmployeeAssignedCustomers = async (companyId: string, employeeId
   console.log('Employee found:', employee);
   console.log('Employee crewId:', employee?.crewId);
 
-  if (!employee || !employee.crewId) {
-    console.log('No employee or crewId found, returning empty array');
-    return [];
-  }
-
   // Get all customers
   const allCustomers = await getCustomers(companyId);
   console.log('All customers:', allCustomers.length);
 
-  // Get routes for today and tomorrow
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  console.log('Generating routes for today and tomorrow...');
-  const todayRoutes = await generateOptimalRoutes(companyId, today);
-  const tomorrowRoutes = await generateOptimalRoutes(companyId, tomorrow);
-
-  console.log('Today routes:', todayRoutes.length);
-  console.log('Tomorrow routes:', tomorrowRoutes.length);
-
-  // Find routes for this employee's crew
-  const crewRoutes = [...todayRoutes, ...tomorrowRoutes].filter(route =>
-    route.crewId === employee.crewId
-  );
-
-  console.log('Routes for employee crew:', crewRoutes.length);
-  console.log('Crew routes:', crewRoutes);
-
-  // Get all customers from these routes
   const assignedCustomerIds = new Set<string>();
-  crewRoutes.forEach(route => {
-    route.customers.forEach(customer => {
-      assignedCustomerIds.add(customer.id);
-    });
+
+  // ALWAYS include customers created by this employee
+  const customersCreatedByEmployee = allCustomers.filter(customer => customer.createdBy === employeeId);
+  customersCreatedByEmployee.forEach(customer => {
+    assignedCustomerIds.add(customer.id);
   });
+  console.log('Customers created by employee:', customersCreatedByEmployee.length);
 
-  console.log('Assigned customer IDs:', Array.from(assignedCustomerIds));
+  // Also include customers from crew routes (if employee has a crew)
+  if (employee?.crewId) {
+    // Get routes for today and tomorrow
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-  // Return customers assigned to this employee's crew
+    console.log('Generating routes for today and tomorrow...');
+    const todayRoutes = await generateOptimalRoutes(companyId, today);
+    const tomorrowRoutes = await generateOptimalRoutes(companyId, tomorrow);
+
+    console.log('Today routes:', todayRoutes.length);
+    console.log('Tomorrow routes:', tomorrowRoutes.length);
+
+    // Find routes for this employee's crew
+    const crewRoutes = [...todayRoutes, ...tomorrowRoutes].filter(route =>
+      route.crewId === employee.crewId
+    );
+
+    console.log('Routes for employee crew:', crewRoutes.length);
+    console.log('Crew routes:', crewRoutes);
+
+    // Get all customers from these routes
+    crewRoutes.forEach(route => {
+      route.customers.forEach(customer => {
+        assignedCustomerIds.add(customer.id);
+      });
+    });
+  }
+
+  console.log('Total assigned customer IDs:', Array.from(assignedCustomerIds));
+
+  // Return all assigned customers (created by employee + in crew routes)
   const assignedCustomers = allCustomers.filter(customer => assignedCustomerIds.has(customer.id));
   console.log('Final assigned customers:', assignedCustomers.length);
 

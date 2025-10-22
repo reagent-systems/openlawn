@@ -105,7 +105,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signIn = async (email: string, password: string) => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
     try {
-      await signInWithEmail(email, password);
+      const userCredential = await signInWithEmail(email, password);
+
+      // Immediately fetch the user profile after signin
+      const userProfile = await getUserProfile(userCredential.user.uid);
+      setAuthState({
+        user: userCredential.user,
+        userProfile,
+        loading: false,
+        error: null,
+      });
     } catch (error: any) {
       const errorMessage = getAuthErrorMessage(error.code);
       setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));
@@ -123,7 +132,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   ) => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
     try {
-      await signUpWithEmail(email, password, displayName, role, companyName, companyId);
+      const userCredential = await signUpWithEmail(email, password, displayName, role, companyName, companyId);
+
+      // Immediately fetch the user profile after signup
+      const userProfile = await getUserProfile(userCredential.user.uid);
+      setAuthState({
+        user: userCredential.user,
+        userProfile,
+        loading: false,
+        error: null,
+      });
     } catch (error: any) {
       const errorMessage = getAuthErrorMessage(error.code);
       setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));

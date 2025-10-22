@@ -104,6 +104,16 @@ export const updateCompany = async (
 };
 
 /**
+ * Update company base location (where crews start and end their day)
+ */
+export const updateCompanyBaseLocation = async (
+  companyId: string,
+  baseLocation: { lat: number; lng: number; address: string }
+): Promise<void> => {
+  await updateCompany(companyId, { baseLocation });
+};
+
+/**
  * Subscribe to company changes
  */
 export const subscribeToCompany = (

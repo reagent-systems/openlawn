@@ -14,29 +14,38 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Get current user's data
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    // Check if user document exists
+    function userExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    // Get current user's company ID
+    // Get current user's data (returns null if doesn't exist)
+    function getUserData() {
+      return userExists() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data : null;
+    }
+
+    // Get current user's company ID (returns null if user doesn't exist)
     function getUserCompanyId() {
-      return getUserData().companyId;
+      let userData = getUserData();
+      return userData != null ? userData.companyId : null;
     }
 
     // Check if user is manager or admin
     function isManagerOrAdmin() {
-      return isAuthenticated() && getUserData().role in ['manager', 'admin'];
+      let userData = getUserData();
+      return isAuthenticated() && userData != null && userData.role in ['manager', 'admin'];
     }
 
     // Check if user belongs to the same company as the resource
     function isSameCompany(resourceData) {
-      return isAuthenticated() && getUserCompanyId() == resourceData.companyId;
+      let companyId = getUserCompanyId();
+      return isAuthenticated() && companyId != null && companyId == resourceData.companyId;
     }
 
     // Check if user belongs to the same company as a document being created
     function isSameCompanyOnCreate() {
-      return isAuthenticated() && getUserCompanyId() == request.resource.data.companyId;
+      let companyId = getUserCompanyId();
+      return isAuthenticated() && companyId != null && companyId == request.resource.data.companyId;
     }
 
     // ========================================
@@ -45,9 +54,11 @@ service cloud.firestore {
 
     match /companies/{companyId} {
       // Company owners can read/write their own company
+      // Also allow users without a profile yet to search for companies (during signup)
       allow read: if isAuthenticated() && (
         resource.data.owner == request.auth.uid ||
-        getUserCompanyId() == companyId
+        getUserCompanyId() == companyId ||
+        !userExists()  // Allow reading during signup
       );
 
       // Only authenticated users can create companies (during registration)

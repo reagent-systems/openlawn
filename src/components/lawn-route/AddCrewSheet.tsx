@@ -27,6 +27,7 @@ import {
   SheetClose
 } from "@/components/ui/sheet"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/hooks/use-auth"
 import { Building2, Users } from "lucide-react"
 import { getUsers } from "@/lib/user-service"
 import type { User } from "@/lib/firebase-types"
@@ -49,6 +50,7 @@ const formSchema = z.object({
 
 export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: AddCrewSheetProps) {
   const { toast } = useToast()
+  const { userProfile } = useAuth()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [availableUsers, setAvailableUsers] = React.useState<User[]>([])
 
@@ -63,10 +65,12 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: Add
   React.useEffect(() => {
     // Load available users
     const loadUsers = async () => {
+      if (!userProfile?.companyId) return;
+
       try {
-        const users = await getUsers()
+        const users = await getUsers(userProfile.companyId)
         // Filter to only show employees and managers (not admins)
-        const availableUsers = users.filter(user => 
+        const availableUsers = users.filter(user =>
           user.role === 'employee' || user.role === 'manager'
         )
         setAvailableUsers(availableUsers)
@@ -74,9 +78,9 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: Add
         console.error('Error loading users:', error)
       }
     }
-    
+
     loadUsers()
-  }, [])
+  }, [userProfile])
 
   const form = useForm<z.infer<typeof formSchema>>({
     defaultValues: {

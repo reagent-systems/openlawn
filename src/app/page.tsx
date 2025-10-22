@@ -25,11 +25,13 @@ import { googleMapsConfig } from "@/lib/env"
 export default function LawnRoutePage() {
   const { userProfile } = useAuth()
   const { toast } = useToast()
-  
+
   // State for customers and users
   const [customers, setCustomers] = useState<Customer[]>([])
   const [users, setUsers] = useState<FirebaseUser[]>([])
   const [routes, setRoutes] = useState<DailyRoute[]>([])
+  const [companyName, setCompanyName] = useState<string>('')
+  const [baseLocation, setBaseLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
   
   // State for manager view
   const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews'>('customers')
@@ -77,61 +79,102 @@ export default function LawnRoutePage() {
   const minSwipeDistance = 30
 
   const isManager = userProfile?.role === 'manager' || userProfile?.role === 'admin'
-  
+
   // Debug logging
   console.log('User Profile:', userProfile)
   console.log('Is Manager:', isManager)
 
+  // Fetch company name and base location
+  useEffect(() => {
+    const fetchCompanyData = async () => {
+      if (!userProfile?.companyId) return;
+
+      try {
+        const { getCompany } = await import('@/lib/company-service');
+        const company = await getCompany(userProfile.companyId);
+        if (company) {
+          setCompanyName(company.name);
+          if (company.baseLocation) {
+            setBaseLocation(company.baseLocation);
+            console.log('Company base location loaded:', company.baseLocation);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching company:', error);
+      }
+    };
+
+    fetchCompanyData();
+  }, [userProfile])
+
   // Subscribe to customers (managers see all, employees see assigned)
   useEffect(() => {
-    if (!userProfile) return
+    if (!userProfile?.companyId) return
 
     if (isManager) {
-      // Managers see all customers
-      const unsubscribeCustomers = subscribeToCustomers((customers) => {
+      // Managers see all customers in their company (real-time subscription)
+      const unsubscribeCustomers = subscribeToCustomers(userProfile.companyId, (customers) => {
+        console.log('Manager: Customers updated via subscription:', customers.length);
         setCustomers(customers)
       })
       return () => unsubscribeCustomers()
     } else {
-      // Employees see only their assigned customers
-      const loadEmployeeCustomers = async () => {
+      // Employees: Use subscription for real-time updates, then filter to assigned customers
+      let isActive = true;
+
+      const unsubscribeCustomers = subscribeToCustomers(userProfile.companyId, async (allCustomers) => {
+        if (!isActive) return;
+
         try {
+          // Import the service to get assigned customers
+          // This includes both customers they created AND customers in their crew routes
           const { getEmployeeAssignedCustomers } = await import('@/lib/route-service');
-          const assignedCustomers = await getEmployeeAssignedCustomers(userProfile.id);
-          setCustomers(assignedCustomers);
+          const assignedCustomers = await getEmployeeAssignedCustomers(userProfile.companyId, userProfile.id);
+
+          if (isActive) {
+            console.log('Employee: Real-time update - showing', assignedCustomers.length, 'assigned customers');
+            setCustomers(assignedCustomers);
+          }
         } catch (error) {
-          console.error('Error loading employee customers:', error);
-          setCustomers([]);
+          console.error('Error getting employee assigned customers:', error);
+          // Fallback: show all customers they created
+          if (isActive) {
+            const myCustomers = allCustomers.filter(c => c.createdBy === userProfile.id);
+            setCustomers(myCustomers);
+          }
         }
+      });
+
+      return () => {
+        isActive = false;
+        unsubscribeCustomers();
       };
-      
-      loadEmployeeCustomers();
     }
   }, [userProfile, isManager])
 
   // Subscribe to users (for manager view)
   useEffect(() => {
-    if (!isManager) return
+    if (!isManager || !userProfile?.companyId) return
 
-    const unsubscribeUsers = subscribeToUsers((users) => {
+    const unsubscribeUsers = subscribeToUsers(userProfile.companyId, (users) => {
       setUsers(users)
     })
 
     return () => unsubscribeUsers()
-  }, [isManager])
+  }, [isManager, userProfile])
 
   // Generate routes for today and tomorrow
   useEffect(() => {
-    if (!userProfile) return
+    if (!userProfile?.companyId) return
 
     const generateRoutes = async () => {
       try {
         const today = new Date()
         const tomorrow = new Date(today)
         tomorrow.setDate(tomorrow.getDate() + 1)
-        
-        const todayRoutes = await generateOptimalRoutes(today)
-        const tomorrowRoutes = await generateOptimalRoutes(tomorrow)
+
+        const todayRoutes = await generateOptimalRoutes(userProfile.companyId, today)
+        const tomorrowRoutes = await generateOptimalRoutes(userProfile.companyId, tomorrow)
         
         // Combine routes by crew, showing today's routes as primary
         const crewRoutes = new Map<string, DailyRoute>();
@@ -175,7 +218,7 @@ export default function LawnRoutePage() {
     }
 
     generateRoutes()
-  }, [userProfile, customers, users, toast])
+  }, [userProfile, customers, users, isManager, toast])
 
   // Swipe handlers
   const onTouchStart = (e: React.TouchEvent) => {
@@ -215,11 +258,16 @@ export default function LawnRoutePage() {
   // Handle adding new customer
   const handleAddCustomer = async (data: any) => {
     try {
+      if (!userProfile?.companyId) {
+        throw new Error('User company ID not found');
+      }
+
       const newCustomer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = {
+        companyId: userProfile.companyId, // REQUIRED: Multi-tenant isolation
         name: data.name,
         address: data.address,
-        lat: data.coordinates?.lat || 0,
-        lng: data.coordinates?.lng || 0,
+        lat: Number(data.coordinates?.lat) || 0,
+        lng: Number(data.coordinates?.lng) || 0,
         notes: data.notes || '',
         billingInfo: {},
         status: 'active',
@@ -231,14 +279,12 @@ export default function LawnRoutePage() {
           scheduledDate: new Date() as any,
           status: 'scheduled',
         }],
-        lastServiceDate: undefined,
-        nextServiceDate: undefined,
         createdBy: userProfile?.id || '',
         servicePreferences: {
           preferredDays: data.servicePreferences.preferredDays,
           preferredTimeRange: data.servicePreferences.preferredTimeRange,
-          serviceFrequency: data.servicePreferences.serviceFrequency === 'weekly' ? 7 : 
-                          data.servicePreferences.serviceFrequency === 'biweekly' ? 14 : 
+          serviceFrequency: data.servicePreferences.serviceFrequency === 'weekly' ? 7 :
+                          data.servicePreferences.serviceFrequency === 'biweekly' ? 14 :
                           data.servicePreferences.serviceFrequency === 'monthly' ? 30 : 1,
         },
         serviceHistory: [],
@@ -262,8 +308,8 @@ export default function LawnRoutePage() {
       await updateDocument('customers', editingCustomer.id, {
         name: data.name,
         address: data.address,
-        lat: data.coordinates?.lat || editingCustomer.lat,
-        lng: data.coordinates?.lng || editingCustomer.lng,
+        lat: Number(data.coordinates?.lat || editingCustomer.lat),
+        lng: Number(data.coordinates?.lng || editingCustomer.lng),
         notes: data.notes || '',
         services: [{
           id: editingCustomer.services[0]?.id || Date.now().toString(),
@@ -340,10 +386,15 @@ export default function LawnRoutePage() {
   // Handle adding new employee
   const handleAddEmployee = async (data: any) => {
     try {
+      if (!userProfile?.companyId) {
+        throw new Error('User company ID not found');
+      }
+
       const { createDocument } = await import('@/lib/firebase-services');
-      
+
       // Create the user document
       const userId = await createDocument('users', {
+        companyId: userProfile.companyId, // REQUIRED: Multi-tenant isolation
         name: data.name,
         email: data.email,
         phone: data.phone || '',
@@ -410,7 +461,7 @@ export default function LawnRoutePage() {
           await assignUserToCrew(employeeId, {
             crewId: crewId,
             serviceTypes: data.serviceTypes,
-            title: undefined, // Keep existing title
+            // title is optional - omitting it keeps existing title
           });
         }
         
@@ -418,13 +469,13 @@ export default function LawnRoutePage() {
       } else {
         // Creating new crew
         const crewId = generateCrewId();
-        
+
         // Assign selected employees to this crew
         for (const employeeId of data.assignedEmployees) {
           await assignUserToCrew(employeeId, {
             crewId: crewId,
             serviceTypes: data.serviceTypes,
-            title: undefined, // Keep existing title
+            // title is optional - omitting it when creating new crew
           });
         }
       }
@@ -548,13 +599,22 @@ export default function LawnRoutePage() {
       </div>
       
       <div className="space-y-4 p-4">
-      {/* Add New Employee Card */}
-      <div 
-        onClick={() => setIsAddEmployeeSheetOpen(true)}
-        className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
-      >
-        <UserIcon className="w-10 h-10 mb-2" />
-        <p className="font-semibold">Add New Employee</p>
+      {/* Employee Join Instructions */}
+      <div className="p-4 border-2 border-blue-200 rounded-lg bg-blue-50 text-blue-900">
+        <div className="flex items-start gap-3">
+          <UserIcon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold mb-1">How to add employees:</p>
+            <p className="text-sm mb-2">
+              Employees can join by signing up with your company name:
+            </p>
+            <ol className="text-sm space-y-1 list-decimal list-inside">
+              <li>Share your company name: <span className="font-semibold bg-white px-2 py-0.5 rounded">{companyName || 'Loading...'}</span></li>
+              <li>Have them sign up and select "Employee" role</li>
+              <li>They enter your exact company name to join</li>
+            </ol>
+          </div>
+        </div>
       </div>
 
       {/* Existing employees */}
@@ -696,13 +756,14 @@ export default function LawnRoutePage() {
           <Header />
           <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
             <div className="md:col-span-2 h-full w-full">
-              <RouteDisplay 
+              <RouteDisplay
                 customers={customers}
                 employees={users.filter(user => user.role === 'employee' || user.role === 'manager')}
                 routes={routes}
                 selectedCustomer={selectedCustomer}
                 onSelectCustomer={handleSelectCustomer}
                 onRouteClick={handleRouteClick}
+                baseLocation={baseLocation}
                 apiKey={googleMapsConfig.apiKey}
               />
             </div>
@@ -813,12 +874,13 @@ export default function LawnRoutePage() {
         <Header />
         <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
           <div className="md:col-span-2 h-full w-full">
-            <RouteDisplay 
+            <RouteDisplay
               customers={customers}
               employees={users.filter(user => user.role === 'employee' || user.role === 'manager')}
               routes={routes}
               selectedCustomer={selectedCustomer}
               onSelectCustomer={handleSelectCustomer}
+              baseLocation={baseLocation}
               apiKey={googleMapsConfig.apiKey}
             />
           </div>

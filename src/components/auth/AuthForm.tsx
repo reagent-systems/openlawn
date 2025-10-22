@@ -77,11 +77,11 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
       return;
     }
 
-    // Require company name for admin/manager roles
-    if ((signUpData.role === 'admin' || signUpData.role === 'manager') && !signUpData.companyName) {
+    // Require company name for all roles
+    if (!signUpData.companyName) {
       toast({
         title: "Error",
-        description: "Company name is required for admin/manager accounts",
+        description: "Company name is required",
         variant: "destructive",
       });
       return;
@@ -250,22 +250,22 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
                 </select>
               </div>
 
-              {(signUpData.role === 'admin' || signUpData.role === 'manager') && (
-                <div className="space-y-2">
-                  <Label htmlFor="signup-company">Company Name</Label>
-                  <Input
-                    id="signup-company"
-                    type="text"
-                    placeholder="Enter your company name"
-                    value={signUpData.companyName}
-                    onChange={(e) => setSignUpData({ ...signUpData, companyName: e.target.value })}
-                    disabled={loading}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    This will create a new company for your business
-                  </p>
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="signup-company">Company Name</Label>
+                <Input
+                  id="signup-company"
+                  type="text"
+                  placeholder="Enter your company name"
+                  value={signUpData.companyName}
+                  onChange={(e) => setSignUpData({ ...signUpData, companyName: e.target.value })}
+                  disabled={loading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {signUpData.role === 'employee'
+                    ? 'Enter your company name to join (must match exactly)'
+                    : 'This will create a new company for your business'}
+                </p>
+              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="signup-password">Password</Label>
