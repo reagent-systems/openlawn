@@ -44,13 +44,6 @@ export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  // Check if we're on mobile with camera support
-  const isMobile =
-    typeof window !== 'undefined' &&
-    /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
-    );
-
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
@@ -171,16 +164,14 @@ export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
     <div className="space-y-4">
       {/* Action Buttons */}
       <div className="flex gap-2 flex-wrap">
-        {isMobile && (
-          <Button
-            onClick={handleCameraCapture}
-            disabled={disabled || isUploading || photos.length >= maxPhotos}
-            variant="outline"
-          >
-            <Camera className="w-4 h-4 mr-2" />
-            Take Photo
-          </Button>
-        )}
+        <Button
+          onClick={handleCameraCapture}
+          disabled={disabled || isUploading || photos.length >= maxPhotos}
+          variant="outline"
+        >
+          <Camera className="w-4 h-4 mr-2" />
+          Camera
+        </Button>
 
         <Button
           onClick={handleFileUpload}
@@ -188,7 +179,7 @@ export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
           variant="outline"
         >
           <Upload className="w-4 h-4 mr-2" />
-          {isMobile ? 'Choose Photo' : 'Upload Photos'}
+          Upload
         </Button>
 
         {photos.length > 0 && (
@@ -273,9 +264,7 @@ export const PhotoCapture: React.FC<PhotoCaptureProps> = ({
           <ImageIcon className="w-12 h-12 mx-auto mb-2 opacity-50" />
           <p>No {photoType} photos added yet</p>
           <p className="text-sm mt-1">
-            {isMobile
-              ? 'Take a photo or upload from gallery'
-              : 'Upload photos from your device'}
+            Take a photo with your camera or upload from your device
           </p>
         </Card>
       )}
