@@ -6,7 +6,8 @@ import {
   listAll,
   StorageReference
 } from 'firebase/storage';
-import { getFirebaseStorage } from './firebase';
+import { getFirebaseStorage, getFirebaseAuth, getFirebaseDb } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 /**
  * Photo service for handling image uploads, downloads, and management
@@ -91,6 +92,48 @@ const generatePhotoId = (): string => {
 };
 
 /**
+ * Check if current user has permission to upload photos for a customer
+ */
+const checkUploadPermission = async (customerId: string): Promise<void> => {
+  const auth = getFirebaseAuth();
+  const db = getFirebaseDb();
+
+  if (!auth?.currentUser) {
+    throw new Error('You must be logged in to upload photos');
+  }
+
+  if (!db) {
+    throw new Error('Firebase database not initialized');
+  }
+
+  const userId = auth.currentUser.uid;
+
+  // Get user profile to check role
+  const userDoc = await getDoc(doc(db, 'users', userId));
+  if (!userDoc.exists()) {
+    throw new Error('User profile not found');
+  }
+
+  const userRole = userDoc.data().role;
+
+  // Admins and managers can upload to any customer
+  if (userRole === 'admin' || userRole === 'manager') {
+    return;
+  }
+
+  // Employees can only upload to customers they created
+  const customerDoc = await getDoc(doc(db, 'customers', customerId));
+  if (!customerDoc.exists()) {
+    throw new Error('Customer not found');
+  }
+
+  const createdBy = customerDoc.data().createdBy;
+  if (createdBy !== userId) {
+    throw new Error('You do not have permission to upload photos for this customer');
+  }
+};
+
+/**
  * Upload a photo to Firebase Storage
  */
 export const uploadPhoto = async (
@@ -103,6 +146,9 @@ export const uploadPhoto = async (
 
   const { customerId, serviceId, photoType, file } = options;
   const photoId = options.photoId || generatePhotoId();
+
+  // Check upload permission before proceeding
+  await checkUploadPermission(customerId);
 
   // Compress image before upload
   console.log(`Compressing image (original size: ${file.size} bytes)...`);
