@@ -59,7 +59,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
         description: "Signed in successfully",
       });
       onSuccess?.();
-    } catch (error) {
+    } catch {
       // Error is handled by the auth hook
     }
   };
@@ -118,7 +118,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
         description: "Account created successfully",
       });
       onSuccess?.();
-    } catch (error) {
+    } catch {
       // Error is handled by the auth hook
     }
   };

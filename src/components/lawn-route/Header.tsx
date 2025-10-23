@@ -1,6 +1,6 @@
 "use client"
 
-import { Leaf, User, LogOut, Shield, Settings, Calendar } from 'lucide-react';
+import { Leaf, User, LogOut, Settings, Calendar } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -33,7 +33,7 @@ export function Header() {
         title: "Signed out",
         description: "You have been successfully signed out",
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to sign out",

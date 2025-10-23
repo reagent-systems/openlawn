@@ -1,7 +1,6 @@
 import type { Customer } from "@/lib/firebase-types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { MapPin, Plus, Calendar, Clock } from "lucide-react"
-import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 
 interface CustomerCardProps {

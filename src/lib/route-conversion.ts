@@ -4,7 +4,7 @@
  * Converts between DailyRoute (from route generation) and Route (for timing features)
  */
 
-import type { DailyRoute, Customer } from './firebase-types'
+import type { DailyRoute } from './firebase-types'
 import type { Route, RouteStop } from './types'
 
 /**
@@ -45,7 +45,7 @@ export function dailyRoutesToRoutes(dailyRoutes: DailyRoute[]): Route[] {
  */
 export function updateDailyRouteWithTiming(
   dailyRoute: DailyRoute,
-  route: Route
+  _route: Route
 ): DailyRoute {
   // This preserves the DailyRoute structure while adding timing data
   // The timing data lives in the Route object in state

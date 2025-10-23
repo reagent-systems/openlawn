@@ -6,8 +6,7 @@ import { ScheduleStatusCard } from "./ScheduleStatusCard"
 import { TimeBreakdownWidget } from "./TimeBreakdownWidget"
 import { StopTimer } from "./StopTimer"
 import { PerStopTimingTable } from "./PerStopTimingTable"
-import type { Route, RouteStop } from "@/lib/types"
-import { RouteProgressCalculator } from "@/lib/route-progress-service"
+import type { Route } from "@/lib/types"
 import { autoDetectArrival } from "@/lib/route-tracking-service"
 
 interface EmployeeRouteViewProps {

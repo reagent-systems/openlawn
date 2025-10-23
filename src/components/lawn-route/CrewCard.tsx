@@ -67,7 +67,7 @@ export function CrewCard({
   if (!crew) return null;
 
   const activeEmployees = crew.employees.filter(emp => emp.status === 'active');
-  const serviceTypes = crew.services.map(s => s.serviceType).join(', ');
+  const _serviceTypes = crew.services.map(s => s.serviceType).join(', ');
 
   return (
     <Card

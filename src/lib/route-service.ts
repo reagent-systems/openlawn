@@ -1,4 +1,3 @@
-import { Timestamp } from 'firebase/firestore';
 import type {
   Customer,
   CustomerPriority,
@@ -7,8 +6,8 @@ import type {
   User,
   DayOfWeek
 } from './firebase-types';
-import { calculateCustomerPriorities, getCustomersNeedingService, getCustomers } from './customer-service';
-import { getUsers, getUsersByRole } from './user-service';
+import { getCustomers } from './customer-service';
+import { getUsers } from './user-service';
 import { getTSPOptimizationService } from './tsp-optimization-service';
 
 // Route cache for daily routes
@@ -544,20 +543,20 @@ export const generateGoogleDirectionsRoute = async (
   }
 
   // Create waypoints for Google Directions API
-  const waypoints = customers.map(customer => ({
+  const _waypoints = customers.map(customer => ({
     location: { lat: customer.lat, lng: customer.lng },
     stopover: true,
   }));
 
   // Use first customer as origin, last as destination
-  const origin = { lat: customers[0].lat, lng: customers[0].lng };
-  const destination = { 
-    lat: customers[customers.length - 1].lat, 
-    lng: customers[customers.length - 1].lng 
+  const _origin = { lat: customers[0].lat, lng: customers[0].lng };
+  const _destination = {
+    lat: customers[customers.length - 1].lat,
+    lng: customers[customers.length - 1].lng
   };
 
   // If we have more than 2 customers, use waypoints
-  const waypointsForAPI = customers.length > 2 ? waypoints.slice(1, -1) : [];
+  const _waypointsForAPI = customers.length > 2 ? _waypoints.slice(1, -1) : [];
 
   try {
     // This would need to be called from the frontend where Google Maps API is available

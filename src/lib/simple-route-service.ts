@@ -1,5 +1,4 @@
-import { Timestamp } from 'firebase/firestore';
-import type { Customer, User, DayOfWeek } from './firebase-types';
+import type { Customer, User } from './firebase-types';
 import { getCustomers } from './customer-service';
 import { getUsers } from './user-service';
 import { getTSPOptimizationService } from './tsp-optimization-service';
@@ -28,8 +27,7 @@ export interface CustomerNeed {
 export const getCustomersNeedingService = async (companyId: string): Promise<CustomerNeed[]> => {
   const customers = await getCustomers(companyId);
   const now = new Date();
-  const twoDaysFromNow = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-  
+
   return customers
     .filter(customer => customer.status === 'active')
     .map(customer => {

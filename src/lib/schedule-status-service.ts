@@ -5,7 +5,7 @@
  * and provides status messages and time estimates
  */
 
-import { Route, RouteStop, ScheduleStatus } from './types';
+import { Route, ScheduleStatus } from './types';
 import { calculateTimeBreakdown } from './time-analytics-service';
 
 /**

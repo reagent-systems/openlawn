@@ -146,7 +146,7 @@ export function EditEmployeeSheet({ open, onOpenChange, employee, onUpdateEmploy
         title: "Employee Updated",
         description: `${values.name} has been updated successfully.`,
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to update employee. Please try again.",
@@ -169,7 +169,7 @@ export function EditEmployeeSheet({ open, onOpenChange, employee, onUpdateEmploy
       })
       setShowDeleteDialog(false)
       onOpenChange(false)
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to delete employee. Please try again.",

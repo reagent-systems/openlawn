@@ -5,7 +5,6 @@ import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 
-import { ManagerMap } from "@/components/lawn-route/ManagerMap"
 import { RouteDisplay } from "@/components/lawn-route/RouteDisplay"
 import { AddCustomerSheet } from "@/components/lawn-route/AddCustomerSheet"
 import { EditCustomerSheet } from "@/components/lawn-route/EditCustomerSheet"
@@ -17,11 +16,10 @@ import { CompanySettingsSheet } from "@/components/lawn-route/CompanySettingsShe
 import { EmployeeRouteView } from "@/components/lawn-route/EmployeeRouteView"
 import { ManagerAnalyticsDashboard } from "@/components/lawn-route/ManagerAnalyticsDashboard"
 import { Header } from "@/components/lawn-route/Header"
-import { Button } from "@/components/ui/button"
-import { Plus, User as UserIcon, Users, Building2, Settings, BarChart3 } from "lucide-react"
+import { Plus, User as UserIcon, Users, Building2, Settings } from "lucide-react"
 import { subscribeToCustomers, subscribeToAllCustomers, addCustomer } from "@/lib/customer-service"
 import { subscribeToUsers, subscribeToAllUsers } from "@/lib/user-service"
-import { generateOptimalRoutes, getCachedRoute } from "@/lib/route-service"
+import { generateOptimalRoutes } from "@/lib/route-service"
 import type { Customer, User as FirebaseUser, DailyRoute, User } from "@/lib/firebase-types"
 import type { Route } from "@/lib/types"
 import { googleMapsConfig } from "@/lib/env"
@@ -247,7 +245,7 @@ export default function LawnRoutePage() {
     }
 
     generateRoutes()
-  }, [userProfile, customers, users, isManager, toast])
+  }, [userProfile, customers, users, isManager, isAdmin, toast])
 
   // Convert DailyRoutes to Routes for timing features
   useEffect(() => {
@@ -523,7 +521,7 @@ export default function LawnRoutePage() {
       const { createDocument } = await import('@/lib/firebase-services');
 
       // Create the user document
-      const userId = await createDocument('users', {
+      await createDocument('users', {
         companyId: userProfile.companyId, // REQUIRED: Multi-tenant isolation
         name: data.name,
         email: data.email,
@@ -628,62 +626,6 @@ export default function LawnRoutePage() {
     setSelectedRoute(route);
     setIsCrewPopupOpen(true);
   };
-
-  // Navigation bar component
-  const renderNavigationBar = () => (
-    <div className="flex w-full bg-background border-t">
-      <button
-        onClick={() => setActiveView('customers')}
-        className={`flex-1 py-3 px-4 text-center transition-colors ${
-          activeView === 'customers' 
-            ? 'bg-primary text-primary-foreground' 
-            : 'hover:bg-muted'
-        }`}
-      >
-        Customers
-      </button>
-      <button
-        onClick={() => setActiveView('employees')}
-        className={`flex-1 py-3 px-4 text-center transition-colors ${
-          activeView === 'employees' 
-            ? 'bg-primary text-primary-foreground' 
-            : 'hover:bg-muted'
-        }`}
-      >
-        Employees
-      </button>
-      <button
-        onClick={() => setActiveView('crews')}
-        className={`flex-1 py-3 px-4 text-center transition-colors ${
-          activeView === 'crews'
-            ? 'bg-primary text-primary-foreground'
-            : 'hover:bg-muted'
-        }`}
-      >
-        Crews
-      </button>
-      <button
-        onClick={() => setActiveView('settings')}
-        className={`flex-1 py-3 px-4 text-center transition-colors ${
-          activeView === 'settings'
-            ? 'bg-primary text-primary-foreground'
-            : 'hover:bg-muted'
-        }`}
-      >
-        Settings
-      </button>
-      <button
-        onClick={() => setActiveView('analytics')}
-        className={`flex-1 py-3 px-4 text-center transition-colors ${
-          activeView === 'analytics'
-            ? 'bg-primary text-primary-foreground'
-            : 'hover:bg-muted'
-        }`}
-      >
-        Analytics
-      </button>
-    </div>
-  )
 
   // Render customers view
   const renderCustomersView = () => (
@@ -1034,28 +976,58 @@ export default function LawnRoutePage() {
               </div>
 
               {/* Navigation Footer */}
-              <div className="flex items-center justify-center p-4 border-t flex-shrink-0 bg-background">
-                <div className="flex items-center w-full space-x-2">
+              <div className="flex items-center justify-center p-3 border-t flex-shrink-0 bg-background">
+                <div className="flex items-center w-full gap-1">
                   <button
                     onClick={() => setActiveView('customers')}
-                    className={`h-4 flex-1 rounded-full transition-colors ${activeView === 'customers' ? 'bg-primary' : 'bg-muted'} hover:opacity-80`}
-                  />
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+                      activeView === 'customers'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    Customers
+                  </button>
                   <button
                     onClick={() => setActiveView('employees')}
-                    className={`h-4 flex-1 rounded-full transition-colors ${activeView === 'employees' ? 'bg-primary' : 'bg-muted'} hover:opacity-80`}
-                  />
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+                      activeView === 'employees'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    Employees
+                  </button>
                   <button
                     onClick={() => setActiveView('crews')}
-                    className={`h-4 flex-1 rounded-full transition-colors ${activeView === 'crews' ? 'bg-primary' : 'bg-muted'} hover:opacity-80`}
-                  />
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+                      activeView === 'crews'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    Crews
+                  </button>
                   <button
                     onClick={() => setActiveView('settings')}
-                    className={`h-4 flex-1 rounded-full transition-colors ${activeView === 'settings' ? 'bg-primary' : 'bg-muted'} hover:opacity-80`}
-                  />
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+                      activeView === 'settings'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    Settings
+                  </button>
                   <button
                     onClick={() => setActiveView('analytics')}
-                    className={`h-4 flex-1 rounded-full transition-colors ${activeView === 'analytics' ? 'bg-primary' : 'bg-muted'} hover:opacity-80`}
-                  />
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+                      activeView === 'analytics'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    Analytics
+                  </button>
                 </div>
               </div>
             </div>

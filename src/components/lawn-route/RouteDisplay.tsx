@@ -60,7 +60,7 @@ export function RouteDisplay({
   routes,
   selectedCustomer,
   onSelectCustomer,
-  onRouteClick,
+  onRouteClick: _onRouteClick,
   baseLocation,
   apiKey
 }: RouteDisplayProps) {

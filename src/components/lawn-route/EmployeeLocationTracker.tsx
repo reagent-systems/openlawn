@@ -14,10 +14,10 @@ interface EmployeeLocationTrackerProps {
   onLocationUpdate?: (location: { lat: number; lng: number; timestamp: number }) => void
 }
 
-export function EmployeeLocationTracker({ 
-  employeeId, 
-  employeeName, 
-  onLocationUpdate 
+export function EmployeeLocationTracker({
+  employeeId: _employeeId,
+  employeeName: _employeeName,
+  onLocationUpdate
 }: EmployeeLocationTrackerProps) {
   const { toast } = useToast()
   const {
@@ -67,7 +67,7 @@ export function EmployeeLocationTracker({
         title: "Location Updated",
         description: "Your current location has been sent to your manager.",
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Location Error",
         description: "Failed to get your current location.",

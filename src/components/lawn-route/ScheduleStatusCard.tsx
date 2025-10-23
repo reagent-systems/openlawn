@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Calendar, Clock, TrendingUp, TrendingDown, CheckCircle2 } from "lucide-react"
 import type { Route } from "@/lib/types"
-import { calculateScheduleStatus, formatTime, getStatusIcon } from "@/lib/schedule-status-service"
+import { calculateScheduleStatus, formatTime } from "@/lib/schedule-status-service"
 
 interface ScheduleStatusCardProps {
   route: Route

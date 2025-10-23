@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Clock, Car, DollarSign, MapPin } from "lucide-react"
 import type { Route } from "@/lib/types"
-import { formatDuration } from "@/lib/time-analytics-service"
 
 interface PerStopTimingTableProps {
   route: Route

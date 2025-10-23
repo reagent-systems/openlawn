@@ -67,7 +67,7 @@ const isMobile = () => {
 };
 
 // Check if we're in a build environment (SSR/SSG)
-const isBuildEnvironment = () => {
+const _isBuildEnvironment = () => {
   return typeof window === 'undefined' && process.env.NODE_ENV === 'production';
 };
 

@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import {
-  uploadPhoto,
   uploadMultiplePhotos,
   validateImageFile,
   fileToBase64,

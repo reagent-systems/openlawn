@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { CrewTimeAnalytics } from "./CrewTimeAnalytics"
 import { PerStopTimingTable } from "./PerStopTimingTable"
 import { TimeBreakdownWidget } from "./TimeBreakdownWidget"
-import { TrendingUp, TrendingDown, Clock, AlertCircle, CheckCircle2 } from "lucide-react"
+import { Clock, AlertCircle, CheckCircle2 } from "lucide-react"
 import type { Route } from "@/lib/types"
 import type { User } from "@/lib/firebase-types"
 import { calculateScheduleStatus, isSignificantlyDelayed } from "@/lib/schedule-status-service"
@@ -38,10 +38,6 @@ export function ManagerAnalyticsDashboard({
   const onScheduleRoutes = routes.filter(route => {
     const status = calculateScheduleStatus(route, currentTime)
     return status.status === 'on_schedule'
-  }).length
-  const aheadRoutes = routes.filter(route => {
-    const status = calculateScheduleStatus(route, currentTime)
-    return status.status === 'ahead'
   }).length
   const behindRoutes = routes.filter(route => {
     const status = calculateScheduleStatus(route, currentTime)

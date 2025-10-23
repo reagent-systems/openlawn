@@ -13,9 +13,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Sheet,
@@ -28,7 +25,7 @@ import {
 } from "@/components/ui/sheet"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/hooks/use-auth"
-import { Building2, Users } from "lucide-react"
+import { Users } from "lucide-react"
 import { getUsers } from "@/lib/user-service"
 import type { User } from "@/lib/firebase-types"
 
@@ -113,7 +110,7 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: Add
         description: editingCrew ? "Crew has been updated successfully." : "Crew has been created successfully.",
       })
       form.reset()
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: editingCrew ? "Failed to update crew. Please try again." : "Failed to create crew. Please try again.",

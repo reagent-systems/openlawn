@@ -12,7 +12,6 @@ import {
   onAuthStateChange,
   getAuthErrorMessage
 } from '@/lib/auth';
-import type { User } from '@/lib/firebase-types';
 
 interface AuthContextType extends AuthState {
   signIn: (email: string, password: string) => Promise<void>;

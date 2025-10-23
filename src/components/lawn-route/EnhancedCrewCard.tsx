@@ -64,8 +64,8 @@ export function EnhancedCrewCard({
   isAddCard = false,
   onClick,
   onEdit,
-  onMarkStopCompleted,
-  onMarkStopIncomplete,
+  onMarkStopCompleted: _onMarkStopCompleted,
+  onMarkStopIncomplete: _onMarkStopIncomplete,
 }: EnhancedCrewCardProps) {
   if (isAddCard) {
     return (
@@ -84,7 +84,7 @@ export function EnhancedCrewCard({
   if (!crew) return null;
 
   const activeEmployees = crew.employees.filter(emp => emp.status === 'active');
-  const serviceTypes = crew.services.map(s => s.serviceType).join(', ');
+  const _serviceTypes = crew.services.map(s => s.serviceType).join(', ');
 
   // Get status color and icon
   const getStatusInfo = () => {
