@@ -12,7 +12,7 @@ import {
   FormMessage,
   FormDescription,
 } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
+import { PlacesAutocompleteSimple } from "@/components/ui/places-autocomplete-simple"
 import {
   Sheet,
   SheetContent,
@@ -42,11 +42,11 @@ export function CompanySettingsSheet({
 }: CompanySettingsSheetProps) {
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
-  const [isGeocoding, setIsGeocoding] = React.useState(false)
 
   const form = useForm({
     defaultValues: {
       address: currentBaseLocation?.address || '',
+      coordinates: currentBaseLocation ? { lat: currentBaseLocation.lat, lng: currentBaseLocation.lng } : undefined,
     },
   })
 
@@ -54,39 +54,11 @@ export function CompanySettingsSheet({
   React.useEffect(() => {
     if (currentBaseLocation) {
       form.setValue('address', currentBaseLocation.address)
+      form.setValue('coordinates', { lat: currentBaseLocation.lat, lng: currentBaseLocation.lng })
     }
   }, [currentBaseLocation, form])
 
-  const geocodeAddress = async (address: string): Promise<{ lat: number; lng: number } | null> => {
-    try {
-      setIsGeocoding(true)
-
-      // Use Google Maps Geocoding API
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
-      )
-
-      const data = await response.json()
-
-      if (data.status === 'OK' && data.results.length > 0) {
-        const location = data.results[0].geometry.location
-        return {
-          lat: location.lat,
-          lng: location.lng,
-        }
-      } else {
-        console.error('Geocoding failed:', data.status)
-        return null
-      }
-    } catch (error) {
-      console.error('Error geocoding address:', error)
-      return null
-    } finally {
-      setIsGeocoding(false)
-    }
-  }
-
-  const onSubmit = async (values: { address: string }) => {
+  const onSubmit = async (values: { address: string; coordinates?: { lat: number; lng: number } }) => {
     setIsSubmitting(true)
     try {
       if (!values.address) {
@@ -98,13 +70,10 @@ export function CompanySettingsSheet({
         return
       }
 
-      // Geocode the address
-      const coordinates = await geocodeAddress(values.address)
-
-      if (!coordinates) {
+      if (!values.coordinates) {
         toast({
-          title: "Geocoding Failed",
-          description: "Could not find coordinates for this address. Please check the address and try again.",
+          title: "Location Required",
+          description: "Please select an address from the autocomplete suggestions.",
           variant: "destructive",
         })
         return
@@ -113,8 +82,8 @@ export function CompanySettingsSheet({
       // Update company base location
       const { updateCompanyBaseLocation } = await import('@/lib/company-service')
       await updateCompanyBaseLocation(companyId, {
-        lat: coordinates.lat,
-        lng: coordinates.lng,
+        lat: values.coordinates.lat,
+        lng: values.coordinates.lng,
         address: values.address,
       })
 
@@ -142,6 +111,12 @@ export function CompanySettingsSheet({
       <SheetContent
         side="bottom"
         className="rounded-t-lg max-h-[90svh] overflow-y-auto"
+        onPointerDownOutside={(e) => {
+          // Don't close if clicking on autocomplete
+          if (e.target && (e.target as Element).closest('.pac-container')) {
+            e.preventDefault()
+          }
+        }}
       >
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -163,14 +138,23 @@ export function CompanySettingsSheet({
                   <FormItem>
                     <FormLabel>Home Base Address</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="123 Main St, City, State ZIP"
-                        {...field}
-                        disabled={isSubmitting || isGeocoding}
+                      <PlacesAutocompleteSimple
+                        value={field.value}
+                        onChange={field.onChange}
+                        placeholder="Start typing an address..."
+                        disabled={isSubmitting}
+                        onPlaceSelect={(place: google.maps.places.PlaceResult) => {
+                          // Extract coordinates when a place is selected
+                          if (place.geometry?.location) {
+                            const lat = place.geometry.location.lat()
+                            const lng = place.geometry.location.lng()
+                            form.setValue('coordinates', { lat, lng })
+                          }
+                        }}
                       />
                     </FormControl>
                     <FormDescription>
-                      Enter your business address or where crews start their day
+                      Start typing and select your business address from the suggestions
                     </FormDescription>
                     {currentBaseLocation && (
                       <p className="text-xs text-muted-foreground mt-2">
@@ -185,15 +169,15 @@ export function CompanySettingsSheet({
 
             <SheetFooter>
               <SheetClose asChild>
-                <Button type="button" variant="outline" disabled={isSubmitting || isGeocoding}>
+                <Button type="button" variant="outline" disabled={isSubmitting}>
                   Cancel
                 </Button>
               </SheetClose>
-              <Button type="submit" disabled={isSubmitting || isGeocoding}>
-                {isSubmitting || isGeocoding ? (
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {isGeocoding ? "Finding Location..." : "Saving..."}
+                    Saving...
                   </>
                 ) : (
                   'Save Location'
