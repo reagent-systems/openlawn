@@ -85,7 +85,7 @@ export function RouteDisplay({
 
   const mapRef = React.useRef<google.maps.Map | null>(null)
   const [directionsResponses, setDirectionsResponses] = React.useState<google.maps.DirectionsResult[]>([])
-  const [selectedRouteIndex, setSelectedRouteIndex] = React.useState<number | null>(null)
+  const [selectedRouteIndex, _setSelectedRouteIndex] = React.useState<number | null>(null)
 
   // Generate a color based on crewId
   const generateColor = (crewId: string): string => {
