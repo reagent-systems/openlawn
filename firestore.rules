@@ -160,6 +160,39 @@ service cloud.firestore {
     }
 
     // ========================================
+    // ROUTE METRICS COLLECTION (TIME TRACKING)
+    // ========================================
+
+    match /route_metrics/{metricId} {
+      // Route metrics are company-specific (admins can read all)
+      // Employees in the crew can read their own metrics
+      // Managers can read all metrics in their company
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        isSameCompany(resource.data) ||
+        (isSameCompany(resource.data) && getUserData().crewId == resource.data.crewId)
+      );
+
+      // Employees and managers can create metrics for their routes
+      allow create: if isAuthenticated() &&
+        isSameCompanyOnCreate() &&
+        (
+          getUserData().crewId == request.resource.data.crewId ||
+          isManagerOrAdmin()
+        );
+
+      // Only managers can update metrics
+      allow update: if isAuthenticated() &&
+        isSameCompany(resource.data) &&
+        isManagerOrAdmin();
+
+      // Only managers can delete metrics
+      allow delete: if isAuthenticated() &&
+        isManagerOrAdmin() &&
+        isSameCompany(resource.data);
+    }
+
+    // ========================================
     // DEFAULT: DENY ALL OTHER ACCESS
     // ========================================
 

@@ -14,14 +14,19 @@ import { EditEmployeeSheet } from "@/components/lawn-route/EditEmployeeSheet"
 import { AddCrewSheet } from "@/components/lawn-route/AddCrewSheet"
 import { CrewPopup } from "@/components/lawn-route/CrewPopup"
 import { CompanySettingsSheet } from "@/components/lawn-route/CompanySettingsSheet"
+import { EmployeeRouteView } from "@/components/lawn-route/EmployeeRouteView"
+import { ManagerAnalyticsDashboard } from "@/components/lawn-route/ManagerAnalyticsDashboard"
 import { Header } from "@/components/lawn-route/Header"
 import { Button } from "@/components/ui/button"
-import { Plus, User as UserIcon, Users, Building2, Settings } from "lucide-react"
+import { Plus, User as UserIcon, Users, Building2, Settings, BarChart3 } from "lucide-react"
 import { subscribeToCustomers, subscribeToAllCustomers, addCustomer } from "@/lib/customer-service"
 import { subscribeToUsers, subscribeToAllUsers } from "@/lib/user-service"
 import { generateOptimalRoutes, getCachedRoute } from "@/lib/route-service"
 import type { Customer, User as FirebaseUser, DailyRoute, User } from "@/lib/firebase-types"
+import type { Route } from "@/lib/types"
 import { googleMapsConfig } from "@/lib/env"
+import { dailyRoutesToRoutes } from "@/lib/route-conversion"
+import { RouteProgressCalculator } from "@/lib/route-progress-service"
 
 export default function LawnRoutePage() {
   const { userProfile } = useAuth()
@@ -31,11 +36,12 @@ export default function LawnRoutePage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [users, setUsers] = useState<FirebaseUser[]>([])
   const [routes, setRoutes] = useState<DailyRoute[]>([])
+  const [timingRoutes, setTimingRoutes] = useState<Route[]>([]) // For timing features
   const [companyName, setCompanyName] = useState<string>('')
   const [baseLocation, setBaseLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
-  
+
   // State for manager view
-  const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews' | 'settings'>('customers')
+  const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews' | 'settings' | 'analytics'>('customers')
   const [isAddCustomerSheetOpen, setIsAddCustomerSheetOpen] = useState(false)
   const [isEditCustomerSheetOpen, setIsEditCustomerSheetOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
@@ -242,6 +248,105 @@ export default function LawnRoutePage() {
 
     generateRoutes()
   }, [userProfile, customers, users, isManager, toast])
+
+  // Convert DailyRoutes to Routes for timing features
+  useEffect(() => {
+    const converted = dailyRoutesToRoutes(routes)
+    setTimingRoutes(converted)
+  }, [routes])
+
+  // Handler functions for stop timing
+  const handleStopArrival = async (customerId: string) => {
+    if (timingRoutes.length === 0) return
+
+    const routeIndex = timingRoutes.findIndex(r =>
+      r.stops.some(s => s.customerId === customerId)
+    )
+    if (routeIndex === -1) return
+
+    const updatedRoute = RouteProgressCalculator.recordStopArrival(
+      timingRoutes[routeIndex],
+      customerId
+    )
+
+    const newTimingRoutes = [...timingRoutes]
+    newTimingRoutes[routeIndex] = updatedRoute
+    setTimingRoutes(newTimingRoutes)
+
+    toast({
+      title: "Arrived",
+      description: "Timer started for this stop",
+    })
+  }
+
+  const handleStopDeparture = async (customerId: string) => {
+    if (timingRoutes.length === 0) return
+
+    const routeIndex = timingRoutes.findIndex(r =>
+      r.stops.some(s => s.customerId === customerId)
+    )
+    if (routeIndex === -1) return
+
+    const updatedRoute = RouteProgressCalculator.recordStopDeparture(
+      timingRoutes[routeIndex],
+      customerId
+    )
+
+    const newTimingRoutes = [...timingRoutes]
+    newTimingRoutes[routeIndex] = updatedRoute
+    setTimingRoutes(newTimingRoutes)
+
+    toast({
+      title: "Completed",
+      description: "Stop marked as complete",
+    })
+  }
+
+  const handleStopPause = async (customerId: string) => {
+    if (timingRoutes.length === 0) return
+
+    const routeIndex = timingRoutes.findIndex(r =>
+      r.stops.some(s => s.customerId === customerId)
+    )
+    if (routeIndex === -1) return
+
+    const updatedRoute = RouteProgressCalculator.pauseStop(
+      timingRoutes[routeIndex],
+      customerId
+    )
+
+    const newTimingRoutes = [...timingRoutes]
+    newTimingRoutes[routeIndex] = updatedRoute
+    setTimingRoutes(newTimingRoutes)
+
+    toast({
+      title: "Paused",
+      description: "Timer paused",
+    })
+  }
+
+  const handleStopResume = async (customerId: string) => {
+    if (timingRoutes.length === 0) return
+
+    const routeIndex = timingRoutes.findIndex(r =>
+      r.stops.some(s => s.customerId === customerId)
+    )
+    if (routeIndex === -1) return
+
+    const updatedRoute = RouteProgressCalculator.resumeStop(
+      timingRoutes[routeIndex],
+      customerId
+    )
+
+    const newTimingRoutes = [...timingRoutes]
+    newTimingRoutes[routeIndex] = updatedRoute
+    setTimingRoutes(newTimingRoutes)
+
+    toast({
+      title: "Resumed",
+      description: "Timer resumed",
+    })
+  }
 
   // Swipe handlers
   const onTouchStart = (e: React.TouchEvent) => {
@@ -567,6 +672,16 @@ export default function LawnRoutePage() {
       >
         Settings
       </button>
+      <button
+        onClick={() => setActiveView('analytics')}
+        className={`flex-1 py-3 px-4 text-center transition-colors ${
+          activeView === 'analytics'
+            ? 'bg-primary text-primary-foreground'
+            : 'hover:bg-muted'
+        }`}
+      >
+        Analytics
+      </button>
     </div>
   )
 
@@ -862,6 +977,15 @@ export default function LawnRoutePage() {
     );
   }
 
+  // Render analytics view
+  const renderAnalyticsView = () => (
+    <ManagerAnalyticsDashboard
+      routes={timingRoutes}
+      users={users}
+      currentTime={new Date()}
+    />
+  )
+
   // Handler to reload base location after update
   const handleLocationUpdated = async () => {
     if (!userProfile?.companyId) return;
@@ -906,6 +1030,7 @@ export default function LawnRoutePage() {
                 {activeView === 'employees' && renderEmployeesView()}
                 {activeView === 'crews' && renderCrewsView()}
                 {activeView === 'settings' && renderSettingsView()}
+                {activeView === 'analytics' && renderAnalyticsView()}
               </div>
 
               {/* Navigation Footer */}
@@ -926,6 +1051,10 @@ export default function LawnRoutePage() {
                   <button
                     onClick={() => setActiveView('settings')}
                     className={`h-4 flex-1 rounded-full transition-colors ${activeView === 'settings' ? 'bg-primary' : 'bg-muted'} hover:opacity-80`}
+                  />
+                  <button
+                    onClick={() => setActiveView('analytics')}
+                    className={`h-4 flex-1 rounded-full transition-colors ${activeView === 'analytics' ? 'bg-primary' : 'bg-muted'} hover:opacity-80`}
                   />
                 </div>
               </div>
@@ -1027,8 +1156,20 @@ export default function LawnRoutePage() {
           </div>
           <div className="md:col-span-1 flex flex-col overflow-hidden">
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-4">
-              {renderCustomersView()}
+            <div className="flex-1 overflow-y-auto">
+              {timingRoutes.length > 0 ? (
+                <EmployeeRouteView
+                  route={timingRoutes[0]}
+                  onStopArrival={handleStopArrival}
+                  onStopDeparture={handleStopDeparture}
+                  onStopPause={handleStopPause}
+                  onStopResume={handleStopResume}
+                />
+              ) : (
+                <div className="p-4">
+                  {renderCustomersView()}
+                </div>
+              )}
             </div>
           </div>
         </main>

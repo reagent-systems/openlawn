@@ -97,4 +97,70 @@ export type RouteStop = {
   estimatedArrival?: string; // Time in HH:MM format
   actualArrival?: Date;
   actualDeparture?: Date;
+
+  // Timing analytics
+  driveTime?: number; // Minutes driving to this stop
+  workTime?: number; // Minutes working at this stop
+  notes?: string; // Employee notes per stop
+  pausedAt?: Date; // If stop was paused
+  resumedAt?: Date; // If stop was resumed
+};
+
+// Schedule status types
+export type ScheduleStatus = {
+  status: 'on_schedule' | 'ahead' | 'behind';
+  minutesDelta: number; // Positive = behind, negative = ahead
+  message: string;
+  estimatedFinishTime: Date;
+  stopsRemaining: number;
+
+  // Time breakdown
+  totalDriveTime: number; // minutes
+  totalWorkTime: number; // minutes
+  totalBreakTime: number; // minutes
+};
+
+// Time breakdown analytics
+export type TimeBreakdown = {
+  driveTime: number; // Total minutes driving
+  workTime: number; // Total minutes at customer locations
+  breakTime: number; // Total minutes on break
+  idleTime: number; // Unexplained gaps
+
+  // Per-stop details
+  stopAnalytics: StopAnalytics[];
+};
+
+export type StopAnalytics = {
+  customerId: string;
+  customerName: string;
+  workDuration: number; // Minutes at this stop
+  driveDuration: number; // Drive time to reach this stop
+  efficiency: number; // work time / total time ratio
+};
+
+// Route metrics for historical tracking
+export type RouteMetrics = {
+  id: string;
+  companyId: string;
+  crewId: string;
+  routeId: string;
+  date: Date | { seconds: number; nanoseconds: number };
+
+  // Aggregate metrics
+  totalDriveTime: number;
+  totalWorkTime: number;
+  totalBreakTime: number;
+  efficiency: number; // 0-1 ratio
+
+  // Per-stop breakdown
+  stopMetrics: {
+    customerId: string;
+    driveTime: number;
+    workTime: number;
+    efficiency: number;
+  }[];
+
+  // Metadata
+  recordedAt: Date | { seconds: number; nanoseconds: number };
 };
