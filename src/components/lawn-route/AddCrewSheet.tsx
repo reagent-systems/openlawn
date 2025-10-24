@@ -28,6 +28,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { Users } from "lucide-react"
 import { getUsers } from "@/lib/user-service"
 import type { User } from "@/lib/firebase-types"
+import { TimeAnalysisBar } from "./TimeAnalysisBar"
 
 interface AddCrewSheetProps {
   open: boolean
@@ -38,6 +39,10 @@ interface AddCrewSheetProps {
     members: User[];
     serviceTypes: string[];
   } | null
+  crewTiming?: {
+    workTime: number;
+    nonWorkTime: number;
+  }
 }
 
 const formSchema = z.object({
@@ -45,7 +50,7 @@ const formSchema = z.object({
   assignedEmployees: z.array(z.string()).default([]),
 })
 
-export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: AddCrewSheetProps) {
+export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew, crewTiming }: AddCrewSheetProps) {
   const { toast } = useToast()
   const { userProfile } = useAuth()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -136,6 +141,18 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: Add
               <SheetDescription>
                 {editingCrew ? 'Update crew assignments and service types.' : 'Assign employees to a crew and set the service type they\'ll handle.'}
               </SheetDescription>
+
+              {/* Time Analysis - Only show when editing a crew */}
+              {editingCrew && crewTiming && (crewTiming.workTime > 0 || crewTiming.nonWorkTime > 0) && (
+                <div className="mt-4 p-4 bg-muted/30 rounded-lg border">
+                  <h4 className="text-sm font-semibold mb-2">Today's Time Breakdown</h4>
+                  <TimeAnalysisBar
+                    workTimeMinutes={crewTiming.workTime}
+                    nonWorkTimeMinutes={crewTiming.nonWorkTime}
+                    showLegend={true}
+                  />
+                </div>
+              )}
             </SheetHeader>
             <div className="grid gap-4 py-6">
               <FormField

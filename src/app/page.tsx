@@ -16,10 +16,15 @@ import { CompanySettingsSheet } from "@/components/lawn-route/CompanySettingsShe
 import { EmployeeRouteView } from "@/components/lawn-route/EmployeeRouteView"
 import { ManagerAnalyticsDashboard } from "@/components/lawn-route/ManagerAnalyticsDashboard"
 import { Header } from "@/components/lawn-route/Header"
+import { TimeAnalysisBar } from "@/components/lawn-route/TimeAnalysisBar"
+import { ProfileSheet } from "@/components/lawn-route/ProfileSheet"
+import { ScheduleSheet } from "@/components/lawn-route/ScheduleSheet"
+import { CompanyManagementSheet } from "@/components/lawn-route/CompanyManagementSheet"
 import { Plus, User as UserIcon, Users, Building2, Settings } from "lucide-react"
 import { subscribeToCustomers, subscribeToAllCustomers, addCustomer } from "@/lib/customer-service"
 import { subscribeToUsers, subscribeToAllUsers } from "@/lib/user-service"
 import { generateOptimalRoutes } from "@/lib/route-service"
+import { getRouteMetrics, downloadMetricsCSV, saveRouteMetrics } from "@/lib/route-metrics-service"
 import type { Customer, User as FirebaseUser, DailyRoute, User } from "@/lib/firebase-types"
 import type { Route } from "@/lib/types"
 import { googleMapsConfig } from "@/lib/env"
@@ -39,7 +44,7 @@ export default function LawnRoutePage() {
   const [baseLocation, setBaseLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
 
   // State for manager view
-  const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews' | 'settings' | 'analytics'>('customers')
+  const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews'>('customers')
   const [isAddCustomerSheetOpen, setIsAddCustomerSheetOpen] = useState(false)
   const [isEditCustomerSheetOpen, setIsEditCustomerSheetOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
@@ -57,6 +62,9 @@ export default function LawnRoutePage() {
   const [selectedRoute, setSelectedRoute] = useState<DailyRoute | null>(null)
   const [isCrewPopupOpen, setIsCrewPopupOpen] = useState(false)
   const [isCompanySettingsOpen, setIsCompanySettingsOpen] = useState(false)
+  const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false)
+  const [isScheduleSheetOpen, setIsScheduleSheetOpen] = useState(false)
+  const [isCompanyManagementOpen, setIsCompanyManagementOpen] = useState(false)
 
   // Generate human-readable crew IDs using animal names
   const generateCrewId = () => {
@@ -370,18 +378,81 @@ export default function LawnRoutePage() {
       // Swipe left - go to next view
       if (activeView === 'customers') setActiveView('employees')
       else if (activeView === 'employees') setActiveView('crews')
-      else if (activeView === 'crews') setActiveView('settings')
-      else if (activeView === 'settings') setActiveView('customers')
+      else if (activeView === 'crews') setActiveView('customers')
     }
 
     if (isRightSwipe) {
       // Swipe right - go to previous view
-      if (activeView === 'customers') setActiveView('settings')
+      if (activeView === 'customers') setActiveView('crews')
       else if (activeView === 'employees') setActiveView('customers')
       else if (activeView === 'crews') setActiveView('employees')
-      else if (activeView === 'settings') setActiveView('crews')
     }
   }
+
+  // Handle exporting route metrics
+  const handleExportMetrics = async () => {
+    try {
+      if (!userProfile?.companyId) {
+        toast({
+          title: "Error",
+          description: "Company ID not found",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Get today's metrics
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+
+      const metrics = await getRouteMetrics(userProfile.companyId, startOfDay, endOfDay);
+
+      if (metrics.length === 0) {
+        toast({
+          title: "No Data",
+          description: "No route metrics found for today",
+        });
+        return;
+      }
+
+      // Download as CSV
+      const filename = `route-metrics-${today.toISOString().split('T')[0]}.csv`;
+      downloadMetricsCSV(metrics, filename);
+
+      toast({
+        title: "Export Complete",
+        description: `Downloaded ${metrics.length} route(s) data`,
+      });
+    } catch (error) {
+      console.error('Error exporting metrics:', error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export route metrics",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Automatically save route metrics when a route is completed
+  useEffect(() => {
+    const saveCompletedRouteMetrics = async () => {
+      if (!userProfile?.companyId) return;
+
+      for (const route of timingRoutes) {
+        if (route.status === 'completed') {
+          try {
+            await saveRouteMetrics(route, userProfile.companyId);
+            console.log('Saved route metrics for', route.id);
+          } catch (error) {
+            console.error('Error saving route metrics:', error);
+          }
+        }
+      }
+    };
+
+    saveCompletedRouteMetrics();
+  }, [timingRoutes, userProfile?.companyId]);
 
   // Handle adding new customer
   const handleAddCustomer = async (data: any) => {
@@ -745,6 +816,24 @@ export default function LawnRoutePage() {
 
   // Render crews view
   const renderCrewsView = () => {
+    // Helper function to calculate work and non-work time for a crew
+    const getCrewTiming = (crewId: string) => {
+      const crewRoute = timingRoutes.find(r => r.crewId === crewId);
+      if (!crewRoute) {
+        return { workTime: 0, nonWorkTime: 0 };
+      }
+
+      let workTime = 0;
+      let driveTime = 0;
+
+      crewRoute.stops.forEach(stop => {
+        workTime += stop.workTime || 0;
+        driveTime += stop.driveTime || 0;
+      });
+
+      return { workTime, nonWorkTime: driveTime };
+    };
+
     // Group users by crewId
     const crews = new Map<string, {
       crewId: string;
@@ -787,55 +876,69 @@ export default function LawnRoutePage() {
           </div>
 
           {/* Crew information */}
-          {crewsList.map((crew) => (
-            <div
-              key={crew.crewId}
-              className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors cursor-pointer"
-              onClick={() => {
-                setEditingCrew(crew);
-                setIsAddCrewSheetOpen(true);
-              }}
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-semibold">Crew {crew.crewId}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {crew.members.length} members
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Services: {crew.serviceTypes.join(', ')}
-                  </p>
-                  <div className="mt-2">
-                    <p className="text-xs text-muted-foreground">Members:</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {crew.members.map((member) => (
-                        <span
-                          key={member.id}
-                          className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800"
-                        >
-                          {member.name} ({member.role})
-                        </span>
-                      ))}
+          {crewsList.map((crew) => {
+            const timing = getCrewTiming(crew.crewId);
+
+            return (
+              <div
+                key={crew.crewId}
+                className="p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+                onClick={() => {
+                  setEditingCrew(crew);
+                  setIsAddCrewSheetOpen(true);
+                }}
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h3 className="font-semibold">Crew {crew.crewId}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {crew.members.length} members
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Services: {crew.serviceTypes.join(', ')}
+                    </p>
+                    <div className="mt-2">
+                      <p className="text-xs text-muted-foreground">Members:</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {crew.members.map((member) => (
+                          <span
+                            key={member.id}
+                            className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800"
+                          >
+                            {member.name} ({member.role})
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
+                  <div className="text-right">
+                    <span className="px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                      Active
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCrew(crew.crewId, crew.members);
+                      }}
+                      className="ml-2 px-2 py-1 rounded-full text-xs bg-red-100 text-red-800 hover:bg-red-200 transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-                    Active
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteCrew(crew.crewId, crew.members);
-                    }}
-                    className="ml-2 px-2 py-1 rounded-full text-xs bg-red-100 text-red-800 hover:bg-red-200 transition-colors"
-                  >
-                    Delete
-                  </button>
-                </div>
+
+                {/* Time Analysis Bar */}
+                {(timing.workTime > 0 || timing.nonWorkTime > 0) && (
+                  <TimeAnalysisBar
+                    workTimeMinutes={timing.workTime}
+                    nonWorkTimeMinutes={timing.nonWorkTime}
+                    showLegend={false}
+                    className="mt-2"
+                  />
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -946,7 +1049,13 @@ export default function LawnRoutePage() {
     return (
       <ProtectedRoute>
         <div className="flex flex-col h-svh bg-background text-foreground font-body">
-          <Header />
+          <Header
+            onOpenCompanySettings={() => setIsCompanySettingsOpen(true)}
+            onExportMetrics={handleExportMetrics}
+            onOpenProfile={() => setIsProfileSheetOpen(true)}
+            onOpenSchedule={() => setIsScheduleSheetOpen(true)}
+            onOpenCompanyManagement={() => setIsCompanyManagementOpen(true)}
+          />
           <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
             <div className="md:col-span-2 h-full w-full">
               <RouteDisplay
@@ -971,63 +1080,35 @@ export default function LawnRoutePage() {
                 {activeView === 'customers' && renderCustomersView()}
                 {activeView === 'employees' && renderEmployeesView()}
                 {activeView === 'crews' && renderCrewsView()}
-                {activeView === 'settings' && renderSettingsView()}
-                {activeView === 'analytics' && renderAnalyticsView()}
               </div>
 
               {/* Navigation Footer */}
               <div className="flex items-center justify-center p-3 border-t flex-shrink-0 bg-background">
                 <div className="flex items-center w-full gap-1">
-                  <button
+                  <div
                     onClick={() => setActiveView('customers')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+                    className={`flex-1 h-4 rounded-full transition-all cursor-pointer ${
                       activeView === 'customers'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        ? 'bg-primary'
+                        : 'bg-muted'
                     }`}
-                  >
-                    Customers
-                  </button>
-                  <button
+                  />
+                  <div
                     onClick={() => setActiveView('employees')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+                    className={`flex-1 h-4 rounded-full transition-all cursor-pointer ${
                       activeView === 'employees'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        ? 'bg-primary'
+                        : 'bg-muted'
                     }`}
-                  >
-                    Employees
-                  </button>
-                  <button
+                  />
+                  <div
                     onClick={() => setActiveView('crews')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
+                    className={`flex-1 h-4 rounded-full transition-all cursor-pointer ${
                       activeView === 'crews'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        ? 'bg-primary'
+                        : 'bg-muted'
                     }`}
-                  >
-                    Crews
-                  </button>
-                  <button
-                    onClick={() => setActiveView('settings')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
-                      activeView === 'settings'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }`}
-                  >
-                    Settings
-                  </button>
-                  <button
-                    onClick={() => setActiveView('analytics')}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-colors ${
-                      activeView === 'analytics'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }`}
-                  >
-                    Analytics
-                  </button>
+                  />
                 </div>
               </div>
             </div>
@@ -1086,6 +1167,19 @@ export default function LawnRoutePage() {
             }}
             onAddCrew={handleAddCrew}
             editingCrew={editingCrew}
+            crewTiming={editingCrew ? (() => {
+              const crewRoute = timingRoutes.find(r => r.crewId === editingCrew.crewId);
+              if (!crewRoute) return { workTime: 0, nonWorkTime: 0 };
+
+              let workTime = 0;
+              let driveTime = 0;
+              crewRoute.stops.forEach(stop => {
+                workTime += stop.workTime || 0;
+                driveTime += stop.driveTime || 0;
+              });
+
+              return { workTime, nonWorkTime: driveTime };
+            })() : undefined}
           />
 
           {/* Crew Popup */}
@@ -1104,6 +1198,24 @@ export default function LawnRoutePage() {
             currentBaseLocation={baseLocation}
             onLocationUpdated={handleLocationUpdated}
           />
+
+          {/* Profile Sheet */}
+          <ProfileSheet
+            open={isProfileSheetOpen}
+            onOpenChange={setIsProfileSheetOpen}
+          />
+
+          {/* Schedule Sheet */}
+          <ScheduleSheet
+            open={isScheduleSheetOpen}
+            onOpenChange={setIsScheduleSheetOpen}
+          />
+
+          {/* Company Management Sheet (Admin Only) */}
+          <CompanyManagementSheet
+            open={isCompanyManagementOpen}
+            onOpenChange={setIsCompanyManagementOpen}
+          />
         </div>
       </ProtectedRoute>
     )
@@ -1113,7 +1225,13 @@ export default function LawnRoutePage() {
   return (
     <ProtectedRoute>
       <div className="flex flex-col h-svh bg-background text-foreground font-body">
-        <Header />
+        <Header
+          onOpenCompanySettings={() => setIsCompanySettingsOpen(true)}
+          onExportMetrics={handleExportMetrics}
+          onOpenProfile={() => setIsProfileSheetOpen(true)}
+          onOpenSchedule={() => setIsScheduleSheetOpen(true)}
+          onOpenCompanyManagement={() => setIsCompanyManagementOpen(true)}
+        />
         <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
           <div className="md:col-span-2 h-full w-full">
             <RouteDisplay
@@ -1165,6 +1283,24 @@ export default function LawnRoutePage() {
           customer={editingCustomer}
           onUpdateCustomer={handleUpdateCustomer}
           onDeleteCustomer={handleDeleteCustomer}
+        />
+
+        {/* Profile Sheet */}
+        <ProfileSheet
+          open={isProfileSheetOpen}
+          onOpenChange={setIsProfileSheetOpen}
+        />
+
+        {/* Schedule Sheet */}
+        <ScheduleSheet
+          open={isScheduleSheetOpen}
+          onOpenChange={setIsScheduleSheetOpen}
+        />
+
+        {/* Company Management Sheet (Admin Only) */}
+        <CompanyManagementSheet
+          open={isCompanyManagementOpen}
+          onOpenChange={setIsCompanyManagementOpen}
         />
       </div>
     </ProtectedRoute>

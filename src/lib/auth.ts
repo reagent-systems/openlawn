@@ -3,7 +3,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  updateProfile,
+  updateProfile as firebaseUpdateProfile,
   sendPasswordResetEmail,
   User as FirebaseUser,
   UserCredential
@@ -287,6 +287,39 @@ export const resetPassword = async (email: string): Promise<void> => {
   } catch (error) {
     console.error('Error sending password reset email:', error);
     throw error;
+  }
+};
+
+// Update user profile (both Auth and Firestore)
+export const updateProfile = async (updates: {
+  displayName?: string;
+  phoneNumber?: string;
+  photoURL?: string;
+}): Promise<void> => {
+  const auth = getFirebaseAuth();
+  const currentUser = auth?.currentUser;
+
+  if (!currentUser) {
+    throw new Error('No user is currently signed in');
+  }
+
+  // Update Firebase Auth profile if displayName or photoURL changed
+  if (updates.displayName !== undefined || updates.photoURL !== undefined) {
+    const authUpdates: { displayName?: string; photoURL?: string } = {};
+    if (updates.displayName !== undefined) authUpdates.displayName = updates.displayName;
+    if (updates.photoURL !== undefined) authUpdates.photoURL = updates.photoURL;
+
+    await firebaseUpdateProfile(currentUser, authUpdates);
+  }
+
+  // Update Firestore profile
+  const firestoreUpdates: Partial<User> = {};
+  if (updates.displayName !== undefined) firestoreUpdates.displayName = updates.displayName;
+  if (updates.phoneNumber !== undefined) firestoreUpdates.phoneNumber = updates.phoneNumber;
+  if (updates.photoURL !== undefined) firestoreUpdates.photoURL = updates.photoURL;
+
+  if (Object.keys(firestoreUpdates).length > 0) {
+    await updateUserProfile(currentUser.uid, firestoreUpdates);
   }
 };
 

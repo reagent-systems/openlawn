@@ -51,22 +51,62 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   });
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
+    let authUnsubscribe: (() => void) | undefined;
+    let profileUnsubscribe: (() => void) | undefined;
 
     try {
-      unsubscribe = onAuthStateChange(async (user: FirebaseUser | null) => {
+      authUnsubscribe = onAuthStateChange(async (user: FirebaseUser | null) => {
         if (user) {
-          // User is signed in
+          // User is signed in - set up real-time profile listener
           try {
-            const userProfile = await getUserProfile(user.uid);
-            setAuthState({
-              user,
-              userProfile,
-              loading: false,
-              error: null,
-            });
+            // Import Firestore functions
+            const { getFirebaseDb } = await import('@/lib/firebase');
+            const { doc, onSnapshot } = await import('firebase/firestore');
+
+            const db = getFirebaseDb();
+            if (!db) {
+              throw new Error('Firebase database not initialized');
+            }
+
+            // Subscribe to real-time updates of the user profile
+            const userDocRef = doc(db, 'users', user.uid);
+            profileUnsubscribe = onSnapshot(
+              userDocRef,
+              (docSnapshot) => {
+                if (docSnapshot.exists()) {
+                  const userProfile = {
+                    id: docSnapshot.id,
+                    ...docSnapshot.data()
+                  } as any;
+
+                  setAuthState({
+                    user,
+                    userProfile,
+                    loading: false,
+                    error: null,
+                  });
+                } else {
+                  console.error('User profile document does not exist');
+                  setAuthState({
+                    user,
+                    userProfile: null,
+                    loading: false,
+                    error: 'User profile not found',
+                  });
+                }
+              },
+              (error) => {
+                console.error('Error listening to user profile:', error);
+                setAuthState({
+                  user,
+                  userProfile: null,
+                  loading: false,
+                  error: 'Failed to load user profile',
+                });
+              }
+            );
           } catch (error) {
-            console.error('Error fetching user profile:', error);
+            console.error('Error setting up profile listener:', error);
             setAuthState({
               user,
               userProfile: null,
@@ -75,7 +115,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             });
           }
         } else {
-          // User is signed out
+          // User is signed out - clean up profile listener
+          if (profileUnsubscribe) {
+            profileUnsubscribe();
+            profileUnsubscribe = undefined;
+          }
+
           setAuthState({
             user: null,
             userProfile: null,
@@ -95,8 +140,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
+      if (authUnsubscribe) {
+        authUnsubscribe();
+      }
+      if (profileUnsubscribe) {
+        profileUnsubscribe();
       }
     };
   }, []);

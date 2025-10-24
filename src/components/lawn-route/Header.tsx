@@ -1,6 +1,6 @@
 "use client"
 
-import { Leaf, User, LogOut, Settings, Calendar } from 'lucide-react';
+import { Leaf, User, LogOut, Settings, Calendar, Building2, Download } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -15,7 +15,21 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 
-export function Header() {
+interface HeaderProps {
+  onOpenCompanySettings?: () => void;
+  onExportMetrics?: () => void;
+  onOpenProfile?: () => void;
+  onOpenSchedule?: () => void;
+  onOpenCompanyManagement?: () => void;
+}
+
+export function Header({
+  onOpenCompanySettings,
+  onExportMetrics,
+  onOpenProfile,
+  onOpenSchedule,
+  onOpenCompanyManagement
+}: HeaderProps) {
   const { user, userProfile, signOut, loading } = useAuth();
   const { toast } = useToast();
 
@@ -84,7 +98,20 @@ export function Header() {
               {userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1)}
             </Badge>
           )}
-          
+
+          {/* Export Button - Only for managers and admins */}
+          {onExportMetrics && userProfile && (userProfile.role === 'manager' || userProfile.role === 'admin') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExportMetrics}
+              className="flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Export</span>
+            </Button>
+          )}
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-10 w-10 rounded-full hover:bg-accent hover:text-accent-foreground transition-colors">
@@ -129,18 +156,26 @@ export function Header() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem onClick={onOpenSchedule} className="cursor-pointer">
                 <Calendar className="mr-2 h-4 w-4" />
-                <span>My Schedule</span>
+                <span>Schedule</span>
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
+              <DropdownMenuItem onClick={onOpenProfile} className="cursor-pointer">
                 <User className="mr-2 h-4 w-4" />
-                <span>Profile Settings</span>
+                <span>Profile</span>
               </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer">
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Account Settings</span>
-              </DropdownMenuItem>
+              {(userProfile?.role === 'admin' || userProfile?.role === 'manager') && (
+                <DropdownMenuItem onClick={onOpenCompanyManagement} className="cursor-pointer">
+                  <Building2 className="mr-2 h-4 w-4" />
+                  <span>Company</span>
+                </DropdownMenuItem>
+              )}
+              {onOpenCompanySettings && userProfile?.role === 'employee' && (
+                <DropdownMenuItem onClick={onOpenCompanySettings} className="cursor-pointer">
+                  <Building2 className="mr-2 h-4 w-4" />
+                  <span>Company Settings</span>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
