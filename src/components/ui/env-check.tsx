@@ -13,6 +13,7 @@ export function EnvCheck() {
     googleMaps: false,
     googleAI: false,
   });
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     // Only run on client side
@@ -22,11 +23,19 @@ export function EnvCheck() {
         googleMaps: !!(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY),
         googleAI: !!(process.env.GOOGLE_AI_API_KEY),
       });
+
+      // Check if mobile
+      const checkMobile = () => {
+        setIsMobile(window.innerWidth < 768);
+      };
+      checkMobile();
+      window.addEventListener('resize', checkMobile);
+      return () => window.removeEventListener('resize', checkMobile);
     }
   }, []);
 
-  if (process.env.NODE_ENV === 'production') {
-    return null; // Don't show in production
+  if (process.env.NODE_ENV === 'production' || isMobile) {
+    return null; // Don't show in production or on mobile
   }
 
   return (

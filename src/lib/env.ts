@@ -38,8 +38,16 @@ const getWebConfig = (): EnvironmentConfig => ({
 
 // For mobile (Capacitor) - you'll need to set these in your build process
 const getMobileConfig = (): EnvironmentConfig => {
-  // In a real mobile app, these would be set during the build process
-  // or loaded from a secure configuration file
+  // In development, use NEXT_PUBLIC_ prefixed variables
+  // In production mobile builds, these should be injected at build time
+  const isDev = process.env.NODE_ENV === 'development';
+
+  if (isDev) {
+    // Use web config for mobile development/testing
+    return getWebConfig();
+  }
+
+  // Production mobile build - use non-prefixed variables (injected at build time)
   return {
     firebase: {
       apiKey: process.env.FIREBASE_API_KEY || '',
@@ -73,21 +81,6 @@ const _isBuildEnvironment = () => {
 
 export const env = isMobile() ? getMobileConfig() : getWebConfig();
 
-// Debug logging in development
-if (process.env.NODE_ENV === 'development') {
-  console.log('Environment Config:', {
-    firebase: {
-      apiKey: env.firebase.apiKey ? 'Present' : 'Missing',
-      projectId: env.firebase.projectId || 'Missing'
-    },
-    googleMaps: {
-      apiKey: env.googleMaps.apiKey ? 'Present' : 'Missing'
-    },
-    googleAI: {
-      apiKey: env.googleAI.apiKey ? 'Present' : 'Missing'
-    }
-  });
-}
 
 // Export individual configs for convenience
 export const firebaseConfig = env.firebase;
