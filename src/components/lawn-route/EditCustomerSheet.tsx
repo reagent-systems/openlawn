@@ -46,7 +46,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar, Clock, Trash2, Camera, CheckCircle2 } from "lucide-react"
-import type { ServicePreferences, DayOfWeek, Customer } from "@/lib/types"
+import type { DayOfWeek, Customer } from "@/lib/types"
 import { ServicePhotoManager } from "@/components/lawn-route/ServicePhotoManager"
 
 interface EditCustomerSheetProps {
@@ -146,7 +146,7 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
         title: "Customer Updated",
         description: `${values.name} has been updated successfully.`,
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to update customer. Please try again.",
@@ -169,7 +169,7 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
       })
       setShowDeleteDialog(false)
       onOpenChange(false)
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to delete customer. Please try again.",

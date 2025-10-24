@@ -2,10 +2,7 @@ import {
   collection,
   doc,
   getDocs,
-  getDoc,
-  addDoc,
   updateDoc,
-  deleteDoc,
   query,
   where,
   orderBy,
@@ -16,40 +13,57 @@ import {
 import { db } from './firebase';
 import type { User } from './firebase-types';
 
-// Get all users
-export const getUsers = async (): Promise<User[]> => {
+// Get ALL users across all companies (admin only)
+export const getAllUsers = async (): Promise<User[]> => {
   const q = query(collection(db, 'users'), orderBy('name'));
   const querySnapshot = await getDocs(q);
-  
+
   return querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
   })) as User[];
 };
 
-// Get users by role
-export const getUsersByRole = async (role: User['role']): Promise<User[]> => {
+// Get all users for a company
+export const getUsers = async (companyId: string): Promise<User[]> => {
   const q = query(
     collection(db, 'users'),
+    where('companyId', '==', companyId),
+    orderBy('name')
+  );
+  const querySnapshot = await getDocs(q);
+
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  })) as User[];
+};
+
+// Get users by role within a company
+export const getUsersByRole = async (companyId: string, role: User['role']): Promise<User[]> => {
+  const q = query(
+    collection(db, 'users'),
+    where('companyId', '==', companyId),
     where('role', '==', role),
     orderBy('name')
   );
   const querySnapshot = await getDocs(q);
-  
+
   return querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data(),
   })) as User[];
 };
 
-// Get users by crew ID
-export const getUsersByCrew = async (crewId?: string): Promise<Map<string, User[]>> => {
+// Get users by crew ID within a company
+export const getUsersByCrew = async (companyId: string, crewId?: string): Promise<Map<string, User[]>> => {
   const crews = new Map<string, User[]>();
-  
+
   if (crewId) {
     // Get specific crew
     const q = query(
       collection(db, 'users'),
+      where('companyId', '==', companyId),
       where('crewId', '==', crewId),
       orderBy('name')
     );
@@ -58,18 +72,19 @@ export const getUsersByCrew = async (crewId?: string): Promise<Map<string, User[
       id: doc.id,
       ...doc.data(),
     })) as User[];
-    
+
     crews.set(crewId, crewMembers);
   } else {
-    // Get all crews
+    // Get all crews for this company
     const q = query(
       collection(db, 'users'),
+      where('companyId', '==', companyId),
       where('crewId', '!=', null),
       orderBy('crewId'),
       orderBy('name')
     );
     const querySnapshot = await getDocs(q);
-    
+
     querySnapshot.docs.forEach(doc => {
       const user = { id: doc.id, ...doc.data() } as User;
       if (user.crewId) {
@@ -80,25 +95,25 @@ export const getUsersByCrew = async (crewId?: string): Promise<Map<string, User[
       }
     });
   }
-  
+
   return crews;
 };
 
-// Get available crews (crews with active members)
-export const getAvailableCrews = async (): Promise<Map<string, User[]>> => {
-  const crews = await getUsersByCrew();
+// Get available crews (crews with active members) within a company
+export const getAvailableCrews = async (companyId: string): Promise<Map<string, User[]>> => {
+  const crews = await getUsersByCrew(companyId);
   const availableCrews = new Map<string, User[]>();
-  
+
   crews.forEach((crewMembers, crewId) => {
-    const activeMembers = crewMembers.filter(member => 
+    const activeMembers = crewMembers.filter(member =>
       member.status === 'available' || member.status === 'busy'
     );
-    
+
     if (activeMembers.length > 0) {
       availableCrews.set(crewId, activeMembers);
     }
   });
-  
+
   return availableCrews;
 };
 
@@ -146,19 +161,19 @@ export const removeUserFromCrew = async (userId: string): Promise<void> => {
 };
 
 // Update crew information
-export const updateCrew = async (crewId: string, updates: {
+export const updateCrew = async (companyId: string, crewId: string, updates: {
   name?: string;
   description?: string;
   services?: { serviceType: string; days: string[]; isActive: boolean }[];
   vehicle?: { type: string; make: string; model: string; year: number; licensePlate?: string };
 }): Promise<void> => {
   // Get all crew members
-  const crewMembers = await getUsersByCrew(crewId);
+  const crewMembers = await getUsersByCrew(companyId, crewId);
   const members = crewMembers.get(crewId) || [];
-  
+
   // Update all crew members with new crew information
   const batch = writeBatch(db);
-  
+
   members.forEach(member => {
     const userRef = doc(db, 'users', member.id);
     batch.update(userRef, {
@@ -166,17 +181,17 @@ export const updateCrew = async (crewId: string, updates: {
       updatedAt: Timestamp.now(),
     });
   });
-  
+
   await batch.commit();
 };
 
 // Delete crew (remove crewId from all members)
-export const deleteCrew = async (crewId: string): Promise<void> => {
-  const crewMembers = await getUsersByCrew(crewId);
+export const deleteCrew = async (companyId: string, crewId: string): Promise<void> => {
+  const crewMembers = await getUsersByCrew(companyId, crewId);
   const members = crewMembers.get(crewId) || [];
-  
+
   const batch = writeBatch(db);
-  
+
   members.forEach(member => {
     const userRef = doc(db, 'users', member.id);
     batch.update(userRef, {
@@ -188,12 +203,12 @@ export const deleteCrew = async (crewId: string): Promise<void> => {
       updatedAt: Timestamp.now(),
     });
   });
-  
+
   await batch.commit();
 };
 
 // Get crew information
-export const getCrewInfo = async (crewId: string): Promise<{
+export const getCrewInfo = async (companyId: string, crewId: string): Promise<{
   id: string;
   name: string;
   description?: string;
@@ -201,14 +216,14 @@ export const getCrewInfo = async (crewId: string): Promise<{
   services: { serviceType: string; days: string[]; isActive: boolean }[];
   vehicle?: { type: string; make: string; model: string; year: number; licensePlate?: string };
 } | null> => {
-  const crewMembers = await getUsersByCrew(crewId);
+  const crewMembers = await getUsersByCrew(companyId, crewId);
   const members = crewMembers.get(crewId) || [];
-  
+
   if (members.length === 0) return null;
-  
+
   // Get crew info from the first member (they should all have the same crew info)
   const firstMember = members[0];
-  
+
   return {
     id: crewId,
     name: firstMember.crewName || 'Unnamed Crew',
@@ -221,6 +236,24 @@ export const getCrewInfo = async (crewId: string): Promise<{
 
 // Real-time listeners
 export const subscribeToUsers = (
+  companyId: string,
+  callback: (users: User[]) => void
+) => {
+  const q = query(
+    collection(db, 'users'),
+    where('companyId', '==', companyId),
+    orderBy('name')
+  );
+  return onSnapshot(q, (querySnapshot) => {
+    const users = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as User[];
+    callback(users);
+  });
+};
+
+export const subscribeToAllUsers = (
   callback: (users: User[]) => void
 ) => {
   const q = query(collection(db, 'users'), orderBy('name'));
@@ -234,11 +267,13 @@ export const subscribeToUsers = (
 };
 
 export const subscribeToCrewMembers = (
+  companyId: string,
   crewId: string,
   callback: (members: User[]) => void
 ) => {
   const q = query(
     collection(db, 'users'),
+    where('companyId', '==', companyId),
     where('crewId', '==', crewId),
     orderBy('name')
   );

@@ -38,6 +38,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { Clock, Trash2 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import type { User } from "@/lib/firebase-types"
 
 interface EditEmployeeSheetProps {
@@ -59,31 +61,31 @@ const formSchema = z.object({
     monday: z.object({
       start: z.string(),
       end: z.string(),
-    }),
+    }).optional(),
     tuesday: z.object({
       start: z.string(),
       end: z.string(),
-    }),
+    }).optional(),
     wednesday: z.object({
       start: z.string(),
       end: z.string(),
-    }),
+    }).optional(),
     thursday: z.object({
       start: z.string(),
       end: z.string(),
-    }),
+    }).optional(),
     friday: z.object({
       start: z.string(),
       end: z.string(),
-    }),
+    }).optional(),
     saturday: z.object({
       start: z.string(),
       end: z.string(),
-    }),
+    }).optional(),
     sunday: z.object({
       start: z.string(),
       end: z.string(),
-    }),
+    }).optional(),
   }),
 })
 
@@ -92,6 +94,17 @@ export function EditEmployeeSheet({ open, onOpenChange, employee, onUpdateEmploy
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false)
+
+  // Track which days are enabled
+  const [enabledDays, setEnabledDays] = React.useState<Record<string, boolean>>({
+    monday: true,
+    tuesday: true,
+    wednesday: true,
+    thursday: true,
+    friday: true,
+    saturday: true,
+    sunday: true,
+  })
 
   const form = useForm<z.infer<typeof formSchema>>({
     defaultValues: {
@@ -116,6 +129,20 @@ export function EditEmployeeSheet({ open, onOpenChange, employee, onUpdateEmploy
   // Update form when employee changes
   React.useEffect(() => {
     if (employee) {
+      const schedule = (employee.schedule || {}) as any;
+
+      // Set enabled days based on what's in the schedule
+      const newEnabledDays: Record<string, boolean> = {
+        monday: !!schedule.monday,
+        tuesday: !!schedule.tuesday,
+        wednesday: !!schedule.wednesday,
+        thursday: !!schedule.thursday,
+        friday: !!schedule.friday,
+        saturday: !!schedule.saturday,
+        sunday: !!schedule.sunday,
+      };
+      setEnabledDays(newEnabledDays);
+
       form.reset({
         name: employee.name || "",
         email: employee.email || "",
@@ -123,14 +150,14 @@ export function EditEmployeeSheet({ open, onOpenChange, employee, onUpdateEmploy
         role: employee.role || "employee",
         title: employee.title || "",
         notes: employee.notes || "",
-        schedule: employee.schedule || {
-          monday: { start: "08:00", end: "17:00" },
-          tuesday: { start: "08:00", end: "17:00" },
-          wednesday: { start: "08:00", end: "17:00" },
-          thursday: { start: "08:00", end: "17:00" },
-          friday: { start: "08:00", end: "17:00" },
-          saturday: { start: "08:00", end: "17:00" },
-          sunday: { start: "08:00", end: "17:00" },
+        schedule: {
+          monday: schedule.monday || { start: "08:00", end: "17:00" },
+          tuesday: schedule.tuesday || { start: "08:00", end: "17:00" },
+          wednesday: schedule.wednesday || { start: "08:00", end: "17:00" },
+          thursday: schedule.thursday || { start: "08:00", end: "17:00" },
+          friday: schedule.friday || { start: "08:00", end: "17:00" },
+          saturday: schedule.saturday || { start: "08:00", end: "17:00" },
+          sunday: schedule.sunday || { start: "08:00", end: "17:00" },
         },
       });
     }
@@ -138,15 +165,28 @@ export function EditEmployeeSheet({ open, onOpenChange, employee, onUpdateEmploy
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!employee) return;
-    
+
     setIsSubmitting(true)
     try {
-      await onUpdateEmployee(values)
+      // Filter out disabled days from the schedule
+      const filteredSchedule: any = {};
+      (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const).forEach((day) => {
+        if (enabledDays[day] && values.schedule[day]) {
+          filteredSchedule[day] = values.schedule[day];
+        }
+      });
+
+      const updatedValues = {
+        ...values,
+        schedule: filteredSchedule,
+      };
+
+      await onUpdateEmployee(updatedValues)
       toast({
         title: "Employee Updated",
         description: `${values.name} has been updated successfully.`,
       })
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to update employee. Please try again.",
@@ -169,7 +209,7 @@ export function EditEmployeeSheet({ open, onOpenChange, employee, onUpdateEmploy
       })
       setShowDeleteDialog(false)
       onOpenChange(false)
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to delete employee. Please try again.",
@@ -292,44 +332,57 @@ export function EditEmployeeSheet({ open, onOpenChange, employee, onUpdateEmploy
                     <Clock className="w-5 h-5" />
                     <h3 className="text-lg font-semibold">Work Schedule</h3>
                   </div>
-                  
+
                   {(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const).map((day) => (
-                    <FormField
-                      key={day}
-                      control={form.control}
-                      name={`schedule.${day}`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="capitalize">{day}</FormLabel>
-                          <FormControl>
-                            <div className="space-y-4">
-                              <Slider
-                                value={[
-                                  parseInt(field.value?.start?.split(':')[0] || '8') * 60 + parseInt(field.value?.start?.split(':')[1] || '0'),
-                                  parseInt(field.value?.end?.split(':')[0] || '17') * 60 + parseInt(field.value?.end?.split(':')[1] || '0')
-                                ]}
-                                onValueChange={(values) => {
-                                  const [start, end] = values;
-                                  field.onChange({
-                                    start: `${Math.floor(start / 60).toString().padStart(2, '0')}:${(start % 60).toString().padStart(2, '0')}`,
-                                    end: `${Math.floor(end / 60).toString().padStart(2, '0')}:${(end % 60).toString().padStart(2, '0')}`,
-                                  });
-                                }}
-                                max={24 * 60}
-                                min={0}
-                                step={15}
-                                className="w-full"
-                              />
-                              <div className="flex justify-between text-sm text-muted-foreground">
-                                <span>{field.value?.start || '08:00'}</span>
-                                <span>{field.value?.end || '17:00'}</span>
-                              </div>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
+                    <div key={day} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor={`${day}-toggle`} className="text-base capitalize">{day}</Label>
+                        <Switch
+                          id={`${day}-toggle`}
+                          checked={enabledDays[day]}
+                          onCheckedChange={(checked) => {
+                            setEnabledDays(prev => ({ ...prev, [day]: checked }));
+                          }}
+                        />
+                      </div>
+
+                      {enabledDays[day] && (
+                        <FormField
+                          control={form.control}
+                          name={`schedule.${day}`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <div className="space-y-4 pl-4">
+                                  <Slider
+                                    value={[
+                                      parseInt(field.value?.start?.split(':')[0] || '8') * 60 + parseInt(field.value?.start?.split(':')[1] || '0'),
+                                      parseInt(field.value?.end?.split(':')[0] || '17') * 60 + parseInt(field.value?.end?.split(':')[1] || '0')
+                                    ]}
+                                    onValueChange={(values) => {
+                                      const [start, end] = values;
+                                      field.onChange({
+                                        start: `${Math.floor(start / 60).toString().padStart(2, '0')}:${(start % 60).toString().padStart(2, '0')}`,
+                                        end: `${Math.floor(end / 60).toString().padStart(2, '0')}:${(end % 60).toString().padStart(2, '0')}`,
+                                      });
+                                    }}
+                                    max={24 * 60}
+                                    min={0}
+                                    step={15}
+                                    className="w-full"
+                                  />
+                                  <div className="flex justify-between text-sm text-muted-foreground">
+                                    <span>{field.value?.start || '08:00'}</span>
+                                    <span>{field.value?.end || '17:00'}</span>
+                                  </div>
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                       )}
-                    />
+                    </div>
                   ))}
                 </div>
               </div>

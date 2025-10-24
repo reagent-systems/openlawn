@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { X, Trash2, Loader2, Image as ImageIcon, ZoomIn } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Trash2, Loader2, Image as ImageIcon, ZoomIn } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import {
   AlertDialog,
@@ -49,11 +48,7 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({
   const { toast } = useToast();
 
   // Load photos
-  useEffect(() => {
-    loadPhotos();
-  }, [customerId, serviceId, photoType]);
-
-  const loadPhotos = async () => {
+  const loadPhotos = useCallback(async () => {
     setLoading(true);
     try {
       const loadedPhotos = await listServicePhotos(
@@ -73,7 +68,11 @@ export const PhotoGallery: React.FC<PhotoGalleryProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [customerId, serviceId, photoType, toast]);
+
+  useEffect(() => {
+    loadPhotos();
+  }, [loadPhotos]);
 
   const handleDeletePhoto = async () => {
     if (!photoToDelete) return;

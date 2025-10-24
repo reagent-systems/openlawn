@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
-import { getStorage } from 'firebase/storage';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
 
 import { firebaseConfig, isFirebaseConfigured } from './env';
 
@@ -37,6 +37,24 @@ const initializeFirebase = () => {
     db = getFirestore(app);
     auth = getAuth(app);
     storage = getStorage(app);
+
+    // Connect to Firebase Emulators if in development
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+      const useEmulators = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true' ||
+                          window.location.hostname === 'localhost' ||
+                          window.location.hostname === '127.0.0.1';
+
+      if (useEmulators) {
+        try {
+          connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+          connectFirestoreEmulator(db, '127.0.0.1', 8080);
+          connectStorageEmulator(storage, '127.0.0.1', 9199);
+          console.log('✅ Connected to Firebase Emulators');
+        } catch (error) {
+          console.warn('Emulator connection failed (may already be connected):', error);
+        }
+      }
+    }
 
     console.log('Firebase initialized successfully');
   } catch (error) {

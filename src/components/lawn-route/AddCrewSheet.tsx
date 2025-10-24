@@ -13,9 +13,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Sheet,
@@ -27,9 +24,11 @@ import {
   SheetClose
 } from "@/components/ui/sheet"
 import { useToast } from "@/hooks/use-toast"
-import { Building2, Users } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
+import { Users } from "lucide-react"
 import { getUsers } from "@/lib/user-service"
 import type { User } from "@/lib/firebase-types"
+import { TimeAnalysisBar } from "./TimeAnalysisBar"
 
 interface AddCrewSheetProps {
   open: boolean
@@ -40,6 +39,10 @@ interface AddCrewSheetProps {
     members: User[];
     serviceTypes: string[];
   } | null
+  crewTiming?: {
+    workTime: number;
+    nonWorkTime: number;
+  }
 }
 
 const formSchema = z.object({
@@ -47,8 +50,9 @@ const formSchema = z.object({
   assignedEmployees: z.array(z.string()).default([]),
 })
 
-export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: AddCrewSheetProps) {
+export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew, crewTiming }: AddCrewSheetProps) {
   const { toast } = useToast()
+  const { userProfile } = useAuth()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [availableUsers, setAvailableUsers] = React.useState<User[]>([])
 
@@ -63,10 +67,12 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: Add
   React.useEffect(() => {
     // Load available users
     const loadUsers = async () => {
+      if (!userProfile?.companyId) return;
+
       try {
-        const users = await getUsers()
+        const users = await getUsers(userProfile.companyId)
         // Filter to only show employees and managers (not admins)
-        const availableUsers = users.filter(user => 
+        const availableUsers = users.filter(user =>
           user.role === 'employee' || user.role === 'manager'
         )
         setAvailableUsers(availableUsers)
@@ -74,9 +80,9 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: Add
         console.error('Error loading users:', error)
       }
     }
-    
+
     loadUsers()
-  }, [])
+  }, [userProfile])
 
   const form = useForm<z.infer<typeof formSchema>>({
     defaultValues: {
@@ -109,7 +115,7 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: Add
         description: editingCrew ? "Crew has been updated successfully." : "Crew has been created successfully.",
       })
       form.reset()
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: editingCrew ? "Failed to update crew. Please try again." : "Failed to create crew. Please try again.",
@@ -133,8 +139,20 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew }: Add
             <SheetHeader className="text-left">
               <SheetTitle>{editingCrew ? 'Edit Crew' : 'Create New Crew'}</SheetTitle>
               <SheetDescription>
-                {editingCrew ? 'Update crew assignments and service types.' : 'Assign employees to a crew and set the service type they\'ll handle.'}
+                {editingCrew ? 'Update crew assignments and service types.' : 'Assign employees to a crew and set the service type they will handle.'}
               </SheetDescription>
+
+              {/* Time Analysis - Only show when editing a crew */}
+              {editingCrew && crewTiming && (crewTiming.workTime > 0 || crewTiming.nonWorkTime > 0) && (
+                <div className="mt-4 p-4 bg-muted/30 rounded-lg border">
+                  <h4 className="text-sm font-semibold mb-2">Today&apos;s Time Breakdown</h4>
+                  <TimeAnalysisBar
+                    workTimeMinutes={crewTiming.workTime}
+                    nonWorkTimeMinutes={crewTiming.nonWorkTime}
+                    showLegend={true}
+                  />
+                </div>
+              )}
             </SheetHeader>
             <div className="grid gap-4 py-6">
               <FormField

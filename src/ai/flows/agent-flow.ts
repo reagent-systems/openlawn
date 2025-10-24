@@ -12,7 +12,6 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { Customer, Route } from '@/lib/types';
 
 //
 // Tool for adding a new customer
@@ -77,7 +76,7 @@ const RouteCustomerSchema = z.object({
 const GetOptimizedRouteToolInputSchema = z.object({
   customers: z.array(RouteCustomerSchema).describe('The list of customers for whom to generate the route.')
 });
-type GetOptimizedRouteToolInput = z.infer<typeof GetOptimizedRouteToolInputSchema>;
+type _GetOptimizedRouteToolInput = z.infer<typeof GetOptimizedRouteToolInputSchema>;
 
 const RouteStopSchema = z.object({
   customerId: z.string(),

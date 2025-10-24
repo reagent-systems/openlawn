@@ -20,6 +20,17 @@ service firebase.storage {
       return role == 'manager' || role == 'admin';
     }
 
+    // Helper function to get user's company ID
+    function getUserCompanyId() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.companyId;
+    }
+
+    // Helper function to check if customer belongs to user's company
+    function isCustomerInSameCompany(customerId) {
+      let customer = firestore.get(/databases/(default)/documents/customers/$(customerId)).data;
+      return customer.companyId == getUserCompanyId();
+    }
+
     // Helper function to check if user created the customer
     function isCustomerOwner(customerId) {
       return firestore.get(/databases/(default)/documents/customers/$(customerId)).data.createdBy == request.auth.uid;

@@ -17,6 +17,7 @@ interface RouteDisplayProps {
   selectedCustomer: Customer | null
   onSelectCustomer: (customer: Customer) => void
   onRouteClick?: (route: DailyRoute) => void
+  baseLocation?: { lat: number; lng: number; address: string } | null
   apiKey?: string;
 }
 
@@ -53,14 +54,15 @@ const mapOptions = {
   ],
 }
 
-export function RouteDisplay({ 
-  customers, 
-  employees, 
-  routes, 
-  selectedCustomer, 
-  onSelectCustomer, 
-  onRouteClick,
-  apiKey 
+export function RouteDisplay({
+  customers,
+  employees,
+  routes,
+  selectedCustomer,
+  onSelectCustomer,
+  onRouteClick: _onRouteClick,
+  baseLocation,
+  apiKey
 }: RouteDisplayProps) {
   
   React.useEffect(() => {
@@ -83,7 +85,7 @@ export function RouteDisplay({
 
   const mapRef = React.useRef<google.maps.Map | null>(null)
   const [directionsResponses, setDirectionsResponses] = React.useState<google.maps.DirectionsResult[]>([])
-  const [selectedRouteIndex, setSelectedRouteIndex] = React.useState<number | null>(null)
+  const [selectedRouteIndex, _setSelectedRouteIndex] = React.useState<number | null>(null)
 
   // Generate a color based on crewId
   const generateColor = (crewId: string): string => {
@@ -107,12 +109,13 @@ export function RouteDisplay({
     if (!isLoaded || routes.length === 0) return;
 
     console.log('RouteDisplay - Processing routes:', routes.length);
-    console.log('RouteDisplay - Route details:', routes.map(r => ({ 
-      crewId: r.crewId, 
-      customerCount: r.customers.length, 
+    console.log('RouteDisplay - Route details:', routes.map(r => ({
+      crewId: r.crewId,
+      customerCount: r.customers.length,
       customers: r.customers.map(c => c.name),
       date: r.date
     })));
+    console.log('RouteDisplay - Base location:', baseLocation);
 
     const generateDirections = async () => {
       const directionsService = new google.maps.DirectionsService();
@@ -120,23 +123,60 @@ export function RouteDisplay({
 
       for (const route of routes) {
         console.log('RouteDisplay - Processing route:', route.crewId, 'with', route.customers.length, 'customers');
-        
-        if (route.customers.length < 2) {
-          console.log('RouteDisplay - Skipping route with less than 2 customers');
+
+        if (route.customers.length === 0) {
+          console.log('RouteDisplay - Skipping route with no customers');
           continue;
         }
 
         try {
-          const origin = { lat: route.customers[0].lat, lng: route.customers[0].lng };
-          const destination = { 
-            lat: route.customers[route.customers.length - 1].lat, 
-            lng: route.customers[route.customers.length - 1].lng 
-          };
-          
-          const waypoints = route.customers.slice(1, -1).map(customer => ({
-            location: { lat: customer.lat, lng: customer.lng },
-            stopover: true,
-          }));
+          // Determine origin and destination
+          let origin: { lat: number; lng: number };
+          let destination: { lat: number; lng: number };
+          let waypoints: google.maps.DirectionsWaypoint[];
+
+          if (baseLocation) {
+            // Start and end at home base
+            const baseLat = Number(baseLocation.lat);
+            const baseLng = Number(baseLocation.lng);
+
+            if (isNaN(baseLat) || isNaN(baseLng)) {
+              console.warn('Invalid base location coordinates, falling back to customer route');
+              origin = { lat: Number(route.customers[0].lat), lng: Number(route.customers[0].lng) };
+              destination = {
+                lat: Number(route.customers[route.customers.length - 1].lat),
+                lng: Number(route.customers[route.customers.length - 1].lng)
+              };
+              waypoints = route.customers.slice(1, -1).map(customer => ({
+                location: { lat: Number(customer.lat), lng: Number(customer.lng) },
+                stopover: true,
+              }));
+            } else {
+              origin = { lat: baseLat, lng: baseLng };
+              destination = { lat: baseLat, lng: baseLng };
+              // All customers become waypoints
+              waypoints = route.customers.map(customer => ({
+                location: { lat: Number(customer.lat), lng: Number(customer.lng) },
+                stopover: true,
+              }));
+              console.log('RouteDisplay - Using home base as origin/destination');
+            }
+          } else {
+            // Fallback: customer to customer (old behavior)
+            if (route.customers.length < 2) {
+              console.log('RouteDisplay - Skipping route with less than 2 customers and no base location');
+              continue;
+            }
+            origin = { lat: Number(route.customers[0].lat), lng: Number(route.customers[0].lng) };
+            destination = {
+              lat: Number(route.customers[route.customers.length - 1].lat),
+              lng: Number(route.customers[route.customers.length - 1].lng)
+            };
+            waypoints = route.customers.slice(1, -1).map(customer => ({
+              location: { lat: Number(customer.lat), lng: Number(customer.lng) },
+              stopover: true,
+            }));
+          }
 
           const result = await directionsService.route({
             origin,
@@ -156,7 +196,7 @@ export function RouteDisplay({
     };
 
     generateDirections();
-  }, [routes, isLoaded]);
+  }, [routes, isLoaded, baseLocation]);
 
   if (loadError) {
     return (
@@ -187,20 +227,30 @@ export function RouteDisplay({
     >
       {/* Customer markers */}
       {customers.map((customer) => {
+        // Ensure lat/lng are numbers
+        const lat = Number(customer.lat);
+        const lng = Number(customer.lng);
+
+        // Skip if invalid coordinates
+        if (isNaN(lat) || isNaN(lng)) {
+          console.warn(`Invalid coordinates for customer ${customer.name}:`, customer.lat, customer.lng);
+          return null;
+        }
+
         // Check if this customer is in the selected tomorrow route
-        const isInSelectedRoute = selectedRouteIndex !== null && 
+        const isInSelectedRoute = selectedRouteIndex !== null &&
           routes[selectedRouteIndex]?.customers.some(c => c.id === customer.id);
-        
+
         return (
           <Marker
             key={customer.id}
-            position={{ lat: customer.lat, lng: customer.lng }}
+            position={{ lat, lng }}
             title={customer.name}
             onClick={() => onSelectCustomer(customer)}
             icon={{
               path: google.maps.SymbolPath.CIRCLE,
               scale: selectedCustomer?.id === customer.id ? 10 : isInSelectedRoute ? 9 : 7,
-              fillColor: selectedCustomer?.id === customer.id ? 'hsl(var(--ring))' : 
+              fillColor: selectedCustomer?.id === customer.id ? 'hsl(var(--ring))' :
                         isInSelectedRoute ? 'hsl(var(--accent))' : 'hsl(var(--primary))',
               fillOpacity: 1,
               strokeWeight: 2,
@@ -214,13 +264,18 @@ export function RouteDisplay({
       {employees.map((employee) => {
         if (!employee.currentLocation) return null;
 
+        const lat = Number(employee.currentLocation.lat);
+        const lng = Number(employee.currentLocation.lng);
+
+        if (isNaN(lat) || isNaN(lng)) {
+          console.warn(`Invalid coordinates for employee ${employee.name}:`, employee.currentLocation);
+          return null;
+        }
+
         return (
           <Marker
             key={`employee-${employee.id}`}
-            position={{ 
-              lat: employee.currentLocation.lat, 
-              lng: employee.currentLocation.lng 
-            }}
+            position={{ lat, lng }}
             title={employee.name}
             icon={{
               path: google.maps.SymbolPath.CIRCLE,
@@ -233,6 +288,37 @@ export function RouteDisplay({
           />
         );
       })}
+
+      {/* Home base marker */}
+      {baseLocation && (() => {
+        const lat = Number(baseLocation.lat);
+        const lng = Number(baseLocation.lng);
+
+        if (isNaN(lat) || isNaN(lng)) {
+          console.warn('Invalid coordinates for base location:', baseLocation);
+          return null;
+        }
+
+        return (
+          <Marker
+            position={{ lat, lng }}
+            title={`Home Base: ${baseLocation.address}`}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 12,
+              fillColor: '#10b981', // Green color for home base
+              fillOpacity: 1,
+              strokeWeight: 3,
+              strokeColor: '#ffffff',
+            }}
+            label={{
+              text: '🏠',
+              fontSize: '20px',
+              color: '#ffffff',
+            }}
+          />
+        );
+      })()}
 
       {/* Route directions */}
       {directionsResponses.map((directionsResponse, index) => {

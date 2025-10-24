@@ -4,7 +4,7 @@ import * as React from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, MapPin, Calendar, Clock } from "lucide-react"
+import { Users, MapPin, Calendar } from "lucide-react"
 import type { DailyRoute, User } from "@/lib/firebase-types"
 
 interface CrewPopupProps {

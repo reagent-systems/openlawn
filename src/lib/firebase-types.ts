@@ -7,8 +7,44 @@ export interface BaseDocument {
   updatedAt: Timestamp;
 }
 
+// Company model for multi-tenant support
+export interface Company extends BaseDocument {
+  name: string; // Company name
+  owner: string; // User ID of the company owner (admin)
+  industry?: string; // e.g., "Lawn Care", "Landscaping"
+  address?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  logo?: string; // URL to company logo
+  timezone?: string; // e.g., "America/New_York"
+  baseLocation?: { // Home base where crews start and end their day
+    lat: number;
+    lng: number;
+    address: string;
+  };
+  settings?: {
+    autoScheduling?: boolean;
+    maxCustomersPerRoute?: number; // Default 12
+    serviceRadius?: number; // miles
+    businessHours?: {
+      [day: string]: { start: string; end: string; open: boolean };
+    };
+  };
+  subscription?: {
+    plan: 'free' | 'starter' | 'professional' | 'enterprise';
+    status: 'active' | 'trial' | 'suspended' | 'cancelled';
+    startDate: Timestamp;
+    endDate?: Timestamp;
+    maxUsers?: number;
+    maxCustomers?: number;
+  };
+  isActive: boolean;
+}
+
 // Updated User model with route optimization roles
 export interface User extends BaseDocument {
+  companyId?: string; // Company this user belongs to (optional for admins - they see ALL companies)
   name: string;
   email: string;
   phone?: string;
@@ -39,7 +75,6 @@ export interface User extends BaseDocument {
   displayName?: string; // Display name for the user
   photoURL?: string; // Profile photo URL
   isActive?: boolean; // Whether the user is active
-  companyId?: string; // Company ID for multi-tenant support
   notes?: string; // Additional notes about the user
 
   // Crew management fields (replaces crews collection)
@@ -89,6 +124,7 @@ export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'frida
 
 // Enhanced Customer model with route optimization features
 export interface Customer extends BaseDocument {
+  companyId: string; // REQUIRED: Company this customer belongs to (multi-tenant isolation)
   name: string;
   address: string;
   lat: number;
@@ -147,6 +183,7 @@ export interface CrewAvailability {
 }
 
 export interface DailyRoute {
+  companyId: string; // REQUIRED: Company this route belongs to (multi-tenant isolation)
   crewId: string;
   date: Date;
   customers: Customer[];

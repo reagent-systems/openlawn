@@ -3,8 +3,7 @@ import {
   uploadBytes,
   getDownloadURL,
   deleteObject,
-  listAll,
-  StorageReference
+  listAll
 } from 'firebase/storage';
 import { getFirebaseStorage, getFirebaseAuth, getFirebaseDb } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';

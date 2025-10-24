@@ -36,6 +36,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
     confirmPassword: '',
     displayName: '',
     role: 'employee' as 'admin' | 'employee' | 'manager',
+    companyName: '',
   });
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -58,7 +59,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
         description: "Signed in successfully",
       });
       onSuccess?.();
-    } catch (error) {
+    } catch {
       // Error is handled by the auth hook
     }
   };
@@ -71,6 +72,16 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
       toast({
         title: "Error",
         description: "Please fill in all fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Require company name for all roles
+    if (!signUpData.companyName) {
+      toast({
+        title: "Error",
+        description: "Company name is required",
         variant: "destructive",
       });
       return;
@@ -95,13 +106,19 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
     }
 
     try {
-      await signUp(signUpData.email, signUpData.password, signUpData.displayName, signUpData.role);
+      await signUp(
+        signUpData.email,
+        signUpData.password,
+        signUpData.displayName,
+        signUpData.role,
+        signUpData.companyName || undefined
+      );
       toast({
         title: "Success",
         description: "Account created successfully",
       });
       onSuccess?.();
-    } catch (error) {
+    } catch {
       // Error is handled by the auth hook
     }
   };
@@ -231,6 +248,23 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
                   <option value="manager">Manager</option>
                   <option value="admin">Admin</option>
                 </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="signup-company">Company Name</Label>
+                <Input
+                  id="signup-company"
+                  type="text"
+                  placeholder="Enter your company name"
+                  value={signUpData.companyName}
+                  onChange={(e) => setSignUpData({ ...signUpData, companyName: e.target.value })}
+                  disabled={loading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {signUpData.role === 'employee'
+                    ? 'Enter your company name to join (must match exactly)'
+                    : 'This will create a new company for your business'}
+                </p>
               </div>
 
               <div className="space-y-2">

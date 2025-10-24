@@ -30,7 +30,7 @@ export const ServicePhotoManager: React.FC<ServicePhotoManagerProps> = ({
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const handlePhotosUploaded = (photos: PhotoMetadata[]) => {
+  const handlePhotosUploaded = (_photos: PhotoMetadata[]) => {
     // Refresh gallery
     setRefreshKey((prev) => prev + 1);
 

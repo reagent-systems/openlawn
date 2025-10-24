@@ -8,7 +8,7 @@ import {
   Polyline,
 } from '@react-google-maps/api'
 import type { Customer, User } from '@/lib/firebase-types'
-import { Loader2, AlertTriangle, MapPin } from 'lucide-react'
+import { Loader2, AlertTriangle } from 'lucide-react'
 
 interface ManagerMapProps {
   customers: Customer[]

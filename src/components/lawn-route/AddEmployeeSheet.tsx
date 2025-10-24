@@ -28,7 +28,7 @@ import {
   SheetClose
 } from "@/components/ui/sheet"
 import { useToast } from "@/hooks/use-toast"
-import { User, Phone, Mail, Building2, Clock } from "lucide-react"
+import { User, Clock } from "lucide-react"
 
 
 interface AddEmployeeSheetProps {
@@ -117,7 +117,7 @@ export function AddEmployeeSheet({ open, onOpenChange, onAddEmployee }: AddEmplo
         description: `${values.name} has been added to your team.`,
       })
       form.reset()
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to add employee. Please try again.",

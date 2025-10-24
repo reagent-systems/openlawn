@@ -1,29 +1,203 @@
 rules_version = '2';
+
+// Firestore Security Rules for OpenLawn - Multi-Tenant
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow users to read and write their own user profile
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-      // Allow managers and admins to read all users
-      allow read: if request.auth != null && 
-        (request.auth.uid == userId || 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['manager', 'admin']);
+
+    // ========================================
+    // HELPER FUNCTIONS
+    // ========================================
+
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
     }
-    
-    // Allow users to read and write their own customers
+
+    // Check if user document exists
+    function userExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Get current user's data (returns null if doesn't exist)
+    function getUserData() {
+      return userExists() ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data : null;
+    }
+
+    // Get current user's company ID (returns null if user doesn't exist)
+    function getUserCompanyId() {
+      let userData = getUserData();
+      return userData != null ? userData.companyId : null;
+    }
+
+    // Check if user is an admin (super-admin with cross-company access)
+    function isAdmin() {
+      let userData = getUserData();
+      return isAuthenticated() && userData != null && userData.role == 'admin';
+    }
+
+    // Check if user is manager or admin
+    function isManagerOrAdmin() {
+      let userData = getUserData();
+      return isAuthenticated() && userData != null && userData.role in ['manager', 'admin'];
+    }
+
+    // Check if user belongs to the same company as the resource
+    function isSameCompany(resourceData) {
+      let companyId = getUserCompanyId();
+      return isAuthenticated() && companyId != null && companyId == resourceData.companyId;
+    }
+
+    // Check if user belongs to the same company as a document being created
+    function isSameCompanyOnCreate() {
+      let companyId = getUserCompanyId();
+      return isAuthenticated() && companyId != null && companyId == request.resource.data.companyId;
+    }
+
+    // ========================================
+    // COMPANIES COLLECTION
+    // ========================================
+
+    match /companies/{companyId} {
+      // Company owners can read/write their own company
+      // Admins can read all companies
+      // Also allow users without a profile yet to search for companies (during signup)
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.owner == request.auth.uid ||
+        getUserCompanyId() == companyId ||
+        !userExists()  // Allow reading during signup
+      );
+
+      // Only authenticated users can create companies (during registration)
+      allow create: if isAuthenticated() &&
+        request.resource.data.owner == request.auth.uid;
+
+      // Only company owner can update/delete their company
+      allow update, delete: if isAuthenticated() &&
+        resource.data.owner == request.auth.uid;
+    }
+
+    // ========================================
+    // USERS COLLECTION
+    // ========================================
+
+    match /users/{userId} {
+      // Users can read/write their own profile
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+
+      // Admins can read all users across all companies
+      allow read: if isAuthenticated() && isAdmin();
+
+      // Users can read other users in the same company
+      allow read: if isAuthenticated() && isSameCompany(resource.data);
+
+      // Managers in the same company can read all users in their company
+      allow read: if isAuthenticated() &&
+        isManagerOrAdmin() &&
+        isSameCompany(resource.data);
+
+      // Only users can create their own profile (during registration)
+      // OR managers/admins can create users in their company
+      allow create: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        (isManagerOrAdmin() && isSameCompanyOnCreate())
+      );
+
+      // Managers and admins can update users in their company
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        (isManagerOrAdmin() && isSameCompany(resource.data))
+      );
+    }
+
+    // ========================================
+    // CUSTOMERS COLLECTION
+    // ========================================
+
     match /customers/{customerId} {
-      allow read, write: if request.auth != null && 
-        request.auth.uid == resource.data.createdBy;
-      
-      // Allow creation of new customers
-      allow create: if request.auth != null && 
-        request.auth.uid == request.resource.data.createdBy;
-        
-      // Allow managers and admins to read all customers
-      allow read: if request.auth != null && 
-        (request.auth.uid == resource.data.createdBy || 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['manager', 'admin']);
+      // CRITICAL: All customer access MUST be filtered by company (except for admins)
+
+      // Admins can read all customers across all companies
+      allow read: if isAuthenticated() && isAdmin();
+
+      // Users can only read customers in their company
+      allow read: if isAuthenticated() && isSameCompany(resource.data);
+
+      // Users can only create customers in their company
+      allow create: if isAuthenticated() &&
+        isSameCompanyOnCreate() &&
+        request.resource.data.createdBy == request.auth.uid;
+
+      // Users can update customers they created in their company
+      allow update: if isAuthenticated() &&
+        isSameCompany(resource.data) &&
+        (resource.data.createdBy == request.auth.uid || isManagerOrAdmin());
+
+      // Only managers/admins can delete customers in their company
+      allow delete: if isAuthenticated() &&
+        isManagerOrAdmin() &&
+        isSameCompany(resource.data);
+    }
+
+    // ========================================
+    // ROUTES COLLECTION
+    // ========================================
+
+    match /routes/{routeId} {
+      // Routes are company-specific (admins can read all)
+      allow read: if isAuthenticated() && (isAdmin() || isSameCompany(resource.data));
+
+      allow create: if isAuthenticated() && isSameCompanyOnCreate();
+
+      allow update: if isAuthenticated() &&
+        isSameCompany(resource.data) &&
+        isManagerOrAdmin();
+
+      allow delete: if isAuthenticated() &&
+        isManagerOrAdmin() &&
+        isSameCompany(resource.data);
+    }
+
+    // ========================================
+    // ROUTE METRICS COLLECTION (TIME TRACKING)
+    // ========================================
+
+    match /route_metrics/{metricId} {
+      // Route metrics are company-specific (admins can read all)
+      // Employees in the crew can read their own metrics
+      // Managers can read all metrics in their company
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        isSameCompany(resource.data) ||
+        (isSameCompany(resource.data) && getUserData().crewId == resource.data.crewId)
+      );
+
+      // Employees and managers can create metrics for their routes
+      allow create: if isAuthenticated() &&
+        isSameCompanyOnCreate() &&
+        (
+          getUserData().crewId == request.resource.data.crewId ||
+          isManagerOrAdmin()
+        );
+
+      // Only managers can update metrics
+      allow update: if isAuthenticated() &&
+        isSameCompany(resource.data) &&
+        isManagerOrAdmin();
+
+      // Only managers can delete metrics
+      allow delete: if isAuthenticated() &&
+        isManagerOrAdmin() &&
+        isSameCompany(resource.data);
+    }
+
+    // ========================================
+    // DEFAULT: DENY ALL OTHER ACCESS
+    // ========================================
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
-} 
+}

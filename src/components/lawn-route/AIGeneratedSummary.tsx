@@ -3,7 +3,7 @@
 import * as React from "react"
 import type { Customer } from "@/lib/firebase-types"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Sparkles, Loader2 } from "lucide-react"
 import { generateSummaryForCustomer } from "@/app/actions"
 

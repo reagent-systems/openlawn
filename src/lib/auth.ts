@@ -1,16 +1,17 @@
-import { 
+import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  updateProfile,
+  updateProfile as firebaseUpdateProfile,
   sendPasswordResetEmail,
   User as FirebaseUser,
   UserCredential
 } from 'firebase/auth';
 import { getFirebaseAuth, getFirebaseDb } from './firebase';
-import { doc, setDoc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import type { User } from './firebase-types';
+import { createCompany } from './company-service';
 
 // Authentication state interface
 export interface AuthState {
@@ -21,10 +22,16 @@ export interface AuthState {
 }
 
 // Create user profile in Firestore
-const createUserProfile = async (user: FirebaseUser, additionalData?: Partial<User>): Promise<void> => {
+const createUserProfile = async (user: FirebaseUser, companyId: string | undefined, additionalData?: Partial<User>): Promise<void> => {
   const db = getFirebaseDb();
   if (!db) {
     throw new Error('Firebase database not initialized');
+  }
+
+  // Only admins can have undefined companyId (super-admins)
+  const isAdmin = additionalData?.role === 'admin';
+  if (!companyId && !isAdmin) {
+    throw new Error('Company ID is required for non-admin users');
   }
 
   const userProfile: Record<string, any> = {
@@ -34,6 +41,11 @@ const createUserProfile = async (user: FirebaseUser, additionalData?: Partial<Us
     role: 'employee', // Default role
     status: 'available',
   };
+
+  // Only add companyId if it exists (admins don't have one)
+  if (companyId) {
+    userProfile.companyId = companyId;
+  }
 
   // Add additional data, filtering out undefined values
   if (additionalData) {
@@ -97,8 +109,8 @@ export const updateUserProfile = async (uid: string, updates: Partial<User>): Pr
   }
 };
 
-// Get user profile from Firestore
-export const getUserProfile = async (uid: string): Promise<User | null> => {
+// Get user profile from Firestore with retry logic
+export const getUserProfile = async (uid: string, retries = 3): Promise<User | null> => {
   try {
     const db = getFirebaseDb();
     if (!db) {
@@ -106,23 +118,38 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
       return null;
     }
 
-    const userDoc = await getDoc(doc(db, 'users', uid));
-    if (userDoc.exists()) {
-      const data = userDoc.data();
-      return {
-        id: userDoc.id,
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
-        role: data.role || 'employee',
-        crewId: data.crewId,
-        schedule: data.schedule,
-        currentLocation: data.currentLocation,
-        status: data.status || 'available',
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-      };
+    for (let i = 0; i < retries; i++) {
+      const userDoc = await getDoc(doc(db, 'users', uid));
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        return {
+          id: userDoc.id,
+          companyId: data.companyId, // Optional for admins (super-admins see all companies)
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          role: data.role || 'employee',
+          crewId: data.crewId,
+          schedule: data.schedule,
+          currentLocation: data.currentLocation,
+          status: data.status || 'available',
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+          displayName: data.displayName,
+          photoURL: data.photoURL,
+          isActive: data.isActive,
+          notes: data.notes,
+          title: data.title,
+        };
+      }
+
+      // If document doesn't exist yet, wait a bit and retry (for signup race condition)
+      if (i < retries - 1) {
+        console.log(`User profile not found, retrying... (${i + 1}/${retries})`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
+
     return null;
   } catch (error) {
     console.error('Error fetching user profile:', error);
@@ -132,29 +159,76 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
 
 // Sign up with email and password
 export const signUpWithEmail = async (
-  email: string, 
-  password: string, 
+  email: string,
+  password: string,
   displayName?: string,
-  role?: 'employee' | 'manager' | 'admin'
+  role?: 'employee' | 'manager' | 'admin',
+  companyName?: string,
+  companyId?: string
 ): Promise<UserCredential> => {
   try {
     const auth = getFirebaseAuth();
-    if (!auth) {
-      throw new Error('Firebase auth not initialized');
+    const db = getFirebaseDb();
+    if (!auth || !db) {
+      throw new Error('Firebase not initialized');
     }
 
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    
+
     // Update display name if provided
     if (displayName) {
-      await updateProfile(userCredential.user, { displayName });
+      await firebaseUpdateProfile(userCredential.user, { displayName });
+    }
+
+    // Handle company assignment
+    let finalCompanyId = companyId;
+    const userRole = role || 'employee';
+
+    if (!finalCompanyId) {
+      if (userRole === 'admin') {
+        // Admin: No company assignment - they are super-admins who see ALL companies
+        finalCompanyId = undefined;
+      } else if (userRole === 'manager') {
+        // Manager: Create a new company
+        const defaultCompanyName = companyName || `${displayName || email}'s Company`;
+        finalCompanyId = await createCompany({
+          name: defaultCompanyName,
+          owner: userCredential.user.uid,
+          isActive: true,
+        });
+      } else if (userRole === 'employee' && companyName) {
+        // Employee: Find existing company by name (case-insensitive search)
+        const companiesRef = collection(db, 'companies');
+        const q = query(companiesRef, where('isActive', '==', true));
+        const querySnapshot = await getDocs(q);
+
+        // Normalize company name for comparison (trim and lowercase)
+        const normalizedSearchName = companyName.trim().toLowerCase();
+
+        // Find matching company (case-insensitive)
+        const matchingCompany = querySnapshot.docs.find(doc =>
+          doc.data().name.trim().toLowerCase() === normalizedSearchName
+        );
+
+        if (!matchingCompany) {
+          throw new Error(`Company "${companyName}" not found. Please check the name and try again, or contact your manager.`);
+        }
+
+        // Use the matching company
+        finalCompanyId = matchingCompany.id;
+      } else {
+        throw new Error('Company name is required.');
+      }
     }
 
     // Create user profile in Firestore
-    await createUserProfile(userCredential.user, { 
+    await createUserProfile(userCredential.user, finalCompanyId, {
       name: displayName || '',
-      role: role || 'employee'
+      role: userRole,
     });
+
+    // Small delay to ensure Firestore write propagates (especially important for emulators)
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     return userCredential;
   } catch (error) {
@@ -213,6 +287,39 @@ export const resetPassword = async (email: string): Promise<void> => {
   } catch (error) {
     console.error('Error sending password reset email:', error);
     throw error;
+  }
+};
+
+// Update user profile (both Auth and Firestore)
+export const updateProfile = async (updates: {
+  displayName?: string;
+  phoneNumber?: string;
+  photoURL?: string;
+}): Promise<void> => {
+  const auth = getFirebaseAuth();
+  const currentUser = auth?.currentUser;
+
+  if (!currentUser) {
+    throw new Error('No user is currently signed in');
+  }
+
+  // Update Firebase Auth profile if displayName or photoURL changed
+  if (updates.displayName !== undefined || updates.photoURL !== undefined) {
+    const authUpdates: { displayName?: string; photoURL?: string } = {};
+    if (updates.displayName !== undefined) authUpdates.displayName = updates.displayName;
+    if (updates.photoURL !== undefined) authUpdates.photoURL = updates.photoURL;
+
+    await firebaseUpdateProfile(currentUser, authUpdates);
+  }
+
+  // Update Firestore profile
+  const firestoreUpdates: Partial<User> = {};
+  if (updates.displayName !== undefined) firestoreUpdates.displayName = updates.displayName;
+  if (updates.phoneNumber !== undefined) firestoreUpdates.phone = updates.phoneNumber;
+  if (updates.photoURL !== undefined) firestoreUpdates.photoURL = updates.photoURL;
+
+  if (Object.keys(firestoreUpdates).length > 0) {
+    await updateUserProfile(currentUser.uid, firestoreUpdates);
   }
 };
 

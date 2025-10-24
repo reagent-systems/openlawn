@@ -21,7 +21,7 @@ export const UserProfile: React.FC = () => {
         title: "Signed out",
         description: "You have been successfully signed out",
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to sign out",

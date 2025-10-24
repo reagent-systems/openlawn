@@ -87,7 +87,7 @@ export function useGeolocation(options: GeolocationOptions = {}) {
       )
       setWatchId(id)
       setState(prev => ({ ...prev, isTracking: true }))
-    } catch (error) {
+    } catch {
       setState(prev => ({
         ...prev,
         error: 'Failed to start location tracking',

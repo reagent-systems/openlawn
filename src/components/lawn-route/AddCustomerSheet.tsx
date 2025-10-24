@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/sheet"
 import { useToast } from "@/hooks/use-toast"
 import { Calendar, Clock } from "lucide-react"
-import type { ServicePreferences, DayOfWeek } from "@/lib/types"
+import type { DayOfWeek } from "@/lib/types"
 
 interface AddCustomerSheetProps {
   open: boolean
@@ -98,7 +98,7 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
         description: `${values.name} has been added to your customer list.`,
       })
       form.reset()
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Failed to add customer. Please try again.",

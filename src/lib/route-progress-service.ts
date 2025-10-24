@@ -383,10 +383,10 @@ export class RouteProgressCalculator {
     const completedRoutes = progress.filter(p => p.status === 'completed').length
     const delayedCrews = progress.filter(p => p.status === 'delayed').length
     const onTimeCrews = progress.filter(p => p.isOnSchedule).length
-    
-    const averageProgress = progress.length > 0 ? 
+
+    const averageProgress = progress.length > 0 ?
       progress.reduce((sum, p) => sum + p.progressPercentage, 0) / progress.length : 0
-    
+
     return {
       totalCrews,
       activeCrews,
@@ -394,6 +394,163 @@ export class RouteProgressCalculator {
       averageProgress: Math.round(averageProgress),
       delayedCrews,
       onTimeCrews
+    }
+  }
+
+  /**
+   * Record stop arrival time
+   */
+  static recordStopArrival(
+    route: Route,
+    customerId: string,
+    arrivalTime: Date = new Date()
+  ): Route {
+    const updatedStops = route.stops.map(stop => {
+      if (stop.customerId === customerId) {
+        return {
+          ...stop,
+          status: 'in_progress' as const,
+          actualArrival: arrivalTime
+        }
+      }
+      return stop
+    })
+
+    return {
+      ...route,
+      stops: updatedStops,
+      status: 'in_progress'
+    }
+  }
+
+  /**
+   * Record stop departure time and calculate work/drive times
+   */
+  static recordStopDeparture(
+    route: Route,
+    customerId: string,
+    departureTime: Date = new Date()
+  ): Route {
+    const stopIndex = route.stops.findIndex(s => s.customerId === customerId)
+    if (stopIndex === -1) return route
+
+    const stop = route.stops[stopIndex]
+    const previousStop = stopIndex > 0 ? route.stops[stopIndex - 1] : null
+
+    // Calculate work time
+    const workTime = stop.actualArrival
+      ? Math.round((departureTime.getTime() - (stop.actualArrival instanceof Date ? stop.actualArrival.getTime() : new Date(stop.actualArrival).getTime())) / 1000 / 60)
+      : undefined
+
+    // Calculate drive time from previous stop
+    const driveTime = previousStop?.actualDeparture && stop.actualArrival
+      ? Math.round(
+          ((stop.actualArrival instanceof Date ? stop.actualArrival.getTime() : new Date(stop.actualArrival).getTime()) -
+           (previousStop.actualDeparture instanceof Date ? previousStop.actualDeparture.getTime() : new Date(previousStop.actualDeparture).getTime())) / 1000 / 60
+        )
+      : undefined
+
+    const updatedStops = route.stops.map((s, idx) => {
+      if (idx === stopIndex) {
+        return {
+          ...s,
+          status: 'completed' as const,
+          actualDeparture: departureTime,
+          workTime,
+          driveTime
+        }
+      }
+      return s
+    })
+
+    // Check if all stops are completed
+    const allCompleted = updatedStops.every(s => s.status === 'completed')
+
+    return {
+      ...route,
+      stops: updatedStops,
+      status: allCompleted ? 'completed' : 'in_progress'
+    }
+  }
+
+  /**
+   * Pause a stop (for breaks, interruptions)
+   */
+  static pauseStop(
+    route: Route,
+    customerId: string,
+    pauseTime: Date = new Date()
+  ): Route {
+    const updatedStops = route.stops.map(stop => {
+      if (stop.customerId === customerId) {
+        return {
+          ...stop,
+          pausedAt: pauseTime
+        }
+      }
+      return stop
+    })
+
+    return {
+      ...route,
+      stops: updatedStops
+    }
+  }
+
+  /**
+   * Resume a paused stop
+   */
+  static resumeStop(
+    route: Route,
+    customerId: string,
+    resumeTime: Date = new Date()
+  ): Route {
+    const updatedStops = route.stops.map(stop => {
+      if (stop.customerId === customerId) {
+        return {
+          ...stop,
+          resumedAt: resumeTime
+        }
+      }
+      return stop
+    })
+
+    return {
+      ...route,
+      stops: updatedStops
+    }
+  }
+
+  /**
+   * Get stop with arrival/departure times
+   */
+  static getStopTimingInfo(route: Route, customerId: string): {
+    stop: RouteStop | null
+    workTime: number | null
+    driveTime: number | null
+    isActive: boolean
+    isPaused: boolean
+  } {
+    const stop = route.stops.find(s => s.customerId === customerId) || null
+    if (!stop) {
+      return {
+        stop: null,
+        workTime: null,
+        driveTime: null,
+        isActive: false,
+        isPaused: false
+      }
+    }
+
+    const isActive = stop.status === 'in_progress'
+    const isPaused = !!stop.pausedAt && !stop.resumedAt
+
+    return {
+      stop,
+      workTime: stop.workTime || null,
+      driveTime: stop.driveTime || null,
+      isActive,
+      isPaused
     }
   }
 } 

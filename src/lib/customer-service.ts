@@ -23,6 +23,7 @@ const convertFirestoreCustomer = (doc: DocumentData): Customer => {
   const data = doc.data();
   return {
     id: doc.id,
+    companyId: data.companyId || '', // REQUIRED: Multi-tenant isolation
     name: data.name || '',
     address: data.address || '',
     lat: data.lat || 0,
@@ -47,7 +48,8 @@ const convertFirestoreCustomer = (doc: DocumentData): Customer => {
 
 // Convert Customer to Firestore document
 const convertToFirestoreCustomer = (customer: Customer) => {
-  return {
+  const data: any = {
+    companyId: customer.companyId, // REQUIRED: Multi-tenant isolation
     name: customer.name,
     address: customer.address,
     lat: customer.lat,
@@ -56,26 +58,46 @@ const convertToFirestoreCustomer = (customer: Customer) => {
     billingInfo: customer.billingInfo,
     status: customer.status,
     services: customer.services,
-    lastServiceDate: customer.lastServiceDate,
-    nextServiceDate: customer.nextServiceDate,
     createdBy: customer.createdBy,
     servicePreferences: customer.servicePreferences,
     serviceHistory: customer.serviceHistory,
     updatedAt: serverTimestamp(),
   };
+
+  // Only include optional timestamp fields if they have values
+  if (customer.lastServiceDate !== undefined) {
+    data.lastServiceDate = customer.lastServiceDate;
+  }
+  if (customer.nextServiceDate !== undefined) {
+    data.nextServiceDate = customer.nextServiceDate;
+  }
+
+  return data;
 };
 
-// Get all customers
-export const getCustomers = async (): Promise<Customer[]> => {
+// Get all customers across ALL companies (admin only)
+export const getAllCustomers = async (): Promise<Customer[]> => {
   const customersRef = collection(db, 'customers');
   const querySnapshot = await getDocs(customersRef);
   return querySnapshot.docs.map(convertFirestoreCustomer);
 };
 
-// Get customers by user (created by)
-export const getCustomersByUser = async (userId: string): Promise<Customer[]> => {
+// Get all customers for a company
+export const getCustomers = async (companyId: string): Promise<Customer[]> => {
   const customersRef = collection(db, 'customers');
-  const q = query(customersRef, where('createdBy', '==', userId));
+  const q = query(customersRef, where('companyId', '==', companyId));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(convertFirestoreCustomer);
+};
+
+// Get customers by user (created by) within a company
+export const getCustomersByUser = async (userId: string, companyId: string): Promise<Customer[]> => {
+  const customersRef = collection(db, 'customers');
+  const q = query(
+    customersRef,
+    where('companyId', '==', companyId),
+    where('createdBy', '==', userId)
+  );
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(convertFirestoreCustomer);
 };
@@ -113,8 +135,8 @@ export const deleteCustomer = async (id: string): Promise<void> => {
   await deleteDoc(customerRef);
 };
 
-// Subscribe to customers
-export const subscribeToCustomers = (
+// Subscribe to ALL customers across all companies (admin only)
+export const subscribeToAllCustomers = (
   callback: (customers: Customer[]) => void
 ): (() => void) => {
   const customersRef = collection(db, 'customers');
@@ -125,13 +147,36 @@ export const subscribeToCustomers = (
   });
 };
 
-// Subscribe to customers by user
-export const subscribeToCustomersByUser = (
-  userId: string,
+// Subscribe to customers for a company
+export const subscribeToCustomers = (
+  companyId: string,
   callback: (customers: Customer[]) => void
 ): (() => void) => {
   const customersRef = collection(db, 'customers');
-  const q = query(customersRef, where('createdBy', '==', userId), orderBy('name'));
+  const q = query(
+    customersRef,
+    where('companyId', '==', companyId),
+    orderBy('name')
+  );
+  return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+    const customers = querySnapshot.docs.map(convertFirestoreCustomer);
+    callback(customers);
+  });
+};
+
+// Subscribe to customers by user within a company
+export const subscribeToCustomersByUser = (
+  userId: string,
+  companyId: string,
+  callback: (customers: Customer[]) => void
+): (() => void) => {
+  const customersRef = collection(db, 'customers');
+  const q = query(
+    customersRef,
+    where('companyId', '==', companyId),
+    where('createdBy', '==', userId),
+    orderBy('name')
+  );
   return onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
     const customers = querySnapshot.docs.map(convertFirestoreCustomer);
     callback(customers);
@@ -204,21 +249,22 @@ export const addServiceRecord = async (
 };
 
 // Get customers needing service (for route optimization)
-export const getCustomersNeedingService = async (date: Date): Promise<Customer[]> => {
+export const getCustomersNeedingService = async (companyId: string, date: Date): Promise<Customer[]> => {
   const fiveDaysAgo = new Date(date);
   fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
-  
+
   const customersRef = collection(db, 'customers');
-  
-  // Get all active customers first
+
+  // Get all active customers for this company
   const allCustomersQuery = query(
     customersRef,
+    where('companyId', '==', companyId),
     where('status', '==', 'active')
   );
-  
+
   const allCustomersSnapshot = await getDocs(allCustomersQuery);
   const allCustomers = allCustomersSnapshot.docs.map(convertFirestoreCustomer);
-  
+
   // Filter customers that need service (null lastServiceDate or older than 5 days)
   const customersNeedingService = allCustomers.filter(customer => {
     if (!customer.lastServiceDate) {
@@ -227,13 +273,13 @@ export const getCustomersNeedingService = async (date: Date): Promise<Customer[]
     const daysSinceLastService = Math.floor((date.getTime() - customer.lastServiceDate.toDate().getTime()) / (1000 * 60 * 60 * 24));
     return daysSinceLastService >= 5;
   });
-  
+
   return customersNeedingService;
 };
 
 // Calculate customer priorities for route optimization
-export const calculateCustomerPriorities = async (date: Date): Promise<CustomerPriority[]> => {
-  const customers = await getCustomersNeedingService(date);
+export const calculateCustomerPriorities = async (companyId: string, date: Date): Promise<CustomerPriority[]> => {
+  const customers = await getCustomersNeedingService(companyId, date);
   
   return customers.map(customer => {
     const daysSinceLastService = customer.lastServiceDate 
@@ -274,9 +320,9 @@ export const calculateCustomerPriorities = async (date: Date): Promise<CustomerP
   });
 };
 
-// Search customers
-export const searchCustomers = async (searchTerm: string): Promise<Customer[]> => {
-  const customers = await getCustomers();
+// Search customers within a company
+export const searchCustomers = async (companyId: string, searchTerm: string): Promise<Customer[]> => {
+  const customers = await getCustomers(companyId);
   return customers.filter(customer =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     customer.address.toLowerCase().includes(searchTerm.toLowerCase()) ||

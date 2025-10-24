@@ -1,9 +1,16 @@
 import type {Metadata} from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/hooks/use-auth"
 import { RoleBasedRouter } from "@/components/auth/RoleBasedRouter"
 import { EnvCheck } from "@/components/ui/env-check"
+
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'OpenLawn',
@@ -17,12 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"></link>
-      </head>
-      <body className="font-body antialiased">
+      <body className={`${inter.className} font-body antialiased`}>
         <AuthProvider>
           <RoleBasedRouter>
             {children}
