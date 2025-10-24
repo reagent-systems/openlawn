@@ -38,16 +38,18 @@ const getWebConfig = (): EnvironmentConfig => ({
 
 // For mobile (Capacitor) - you'll need to set these in your build process
 const getMobileConfig = (): EnvironmentConfig => {
-  // In development, use NEXT_PUBLIC_ prefixed variables
-  // In production mobile builds, these should be injected at build time
-  const isDev = process.env.NODE_ENV === 'development';
+  // For mobile web browsers (viewing the site on mobile), always use web config
+  // For actual Capacitor native apps, this will be replaced during the build process
 
-  if (isDev) {
-    // Use web config for mobile development/testing
+  // Check if we're in a Capacitor native app context
+  const isCapacitorNative = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform?.();
+
+  if (!isCapacitorNative) {
+    // Mobile web browser - use the same config as desktop (NEXT_PUBLIC_ prefixed)
     return getWebConfig();
   }
 
-  // Production mobile build - use non-prefixed variables (injected at build time)
+  // Native Capacitor app - use non-prefixed variables (injected at build time)
   return {
     firebase: {
       apiKey: process.env.FIREBASE_API_KEY || '',
