@@ -284,4 +284,58 @@ export const subscribeToCrewMembers = (
     })) as User[];
     callback(members);
   });
+};
+
+// Get pending users for a company (awaiting manager approval)
+export const getPendingUsers = async (companyId: string): Promise<User[]> => {
+  const q = query(
+    collection(db, 'users'),
+    where('companyId', '==', companyId),
+    where('accountStatus', '==', 'pending'),
+    orderBy('createdAt', 'desc')
+  );
+  const querySnapshot = await getDocs(q);
+
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+  })) as User[];
+};
+
+// Subscribe to pending users for real-time updates
+export const subscribeToPendingUsers = (
+  companyId: string,
+  callback: (users: User[]) => void
+) => {
+  const q = query(
+    collection(db, 'users'),
+    where('companyId', '==', companyId),
+    where('accountStatus', '==', 'pending'),
+    orderBy('createdAt', 'desc')
+  );
+  return onSnapshot(q, (querySnapshot) => {
+    const users = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as User[];
+    callback(users);
+  });
+};
+
+// Approve a pending user
+export const approveUser = async (userId: string): Promise<void> => {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, {
+    accountStatus: 'active',
+    updatedAt: Timestamp.now(),
+  });
+};
+
+// Reject a pending user (sets status to disabled)
+export const rejectUser = async (userId: string): Promise<void> => {
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, {
+    accountStatus: 'disabled',
+    updatedAt: Timestamp.now(),
+  });
 }; 

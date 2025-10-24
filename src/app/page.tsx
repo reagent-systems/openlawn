@@ -19,6 +19,8 @@ import { TimeAnalysisBar } from "@/components/lawn-route/TimeAnalysisBar"
 import { ProfileSheet } from "@/components/lawn-route/ProfileSheet"
 import { ScheduleSheet } from "@/components/lawn-route/ScheduleSheet"
 import { CompanyManagementSheet } from "@/components/lawn-route/CompanyManagementSheet"
+import { PendingUsersSheet } from "@/components/lawn-route/PendingUsersSheet"
+import { PendingApprovalScreen } from "@/components/auth/PendingApprovalScreen"
 import { Plus, User as UserIcon, Users, Building2 } from "lucide-react"
 import { subscribeToCustomers, subscribeToAllCustomers, addCustomer } from "@/lib/customer-service"
 import { subscribeToUsers, subscribeToAllUsers } from "@/lib/user-service"
@@ -64,6 +66,7 @@ export default function LawnRoutePage() {
   const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false)
   const [isScheduleSheetOpen, setIsScheduleSheetOpen] = useState(false)
   const [isCompanyManagementOpen, setIsCompanyManagementOpen] = useState(false)
+  const [isPendingUsersSheetOpen, setIsPendingUsersSheetOpen] = useState(false)
 
   // Generate human-readable crew IDs using animal names
   const generateCrewId = () => {
@@ -103,6 +106,7 @@ export default function LawnRoutePage() {
   useEffect(() => {
     const fetchCompanyData = async () => {
       if (!userProfile?.companyId) return;
+      if (userProfile.accountStatus === 'pending') return; // Skip for pending users
 
       try {
         const { getCompany } = await import('@/lib/company-service');
@@ -125,6 +129,7 @@ export default function LawnRoutePage() {
   // Subscribe to customers (admins see all, managers see company, employees see assigned)
   useEffect(() => {
     if (!userProfile) return
+    if (userProfile.accountStatus === 'pending') return // Skip for pending users
 
     if (isAdmin) {
       // Admins see ALL customers across all companies (real-time subscription)
@@ -180,6 +185,7 @@ export default function LawnRoutePage() {
   // Subscribe to users (for manager and admin view)
   useEffect(() => {
     if (!isManager || !userProfile) return
+    if (userProfile.accountStatus === 'pending') return // Skip for pending users
 
     if (isAdmin) {
       // Admins see ALL users across all companies
@@ -200,6 +206,7 @@ export default function LawnRoutePage() {
   // Generate routes for today and tomorrow (skip for admins who don't have a company)
   useEffect(() => {
     if (!userProfile?.companyId || isAdmin) return
+    if (userProfile.accountStatus === 'pending') return // Skip for pending users
 
     const generateRoutes = async () => {
       try {
@@ -957,6 +964,11 @@ export default function LawnRoutePage() {
     }
   }
 
+  // If user is pending approval, show the pending approval screen
+  if (userProfile?.accountStatus === 'pending') {
+    return <PendingApprovalScreen />
+  }
+
   if (isManager) {
     return (
       <ProtectedRoute>
@@ -967,6 +979,7 @@ export default function LawnRoutePage() {
             onOpenProfile={() => setIsProfileSheetOpen(true)}
             onOpenSchedule={() => setIsScheduleSheetOpen(true)}
             onOpenCompanyManagement={() => setIsCompanyManagementOpen(true)}
+            onOpenPendingUsers={() => setIsPendingUsersSheetOpen(true)}
           />
           <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
             <div className="md:col-span-2 h-full w-full">
@@ -1127,6 +1140,12 @@ export default function LawnRoutePage() {
           <CompanyManagementSheet
             open={isCompanyManagementOpen}
             onOpenChange={setIsCompanyManagementOpen}
+          />
+
+          {/* Pending Users Sheet (Manager/Admin Only) */}
+          <PendingUsersSheet
+            open={isPendingUsersSheetOpen}
+            onOpenChange={setIsPendingUsersSheetOpen}
           />
         </div>
       </ProtectedRoute>

@@ -1,6 +1,6 @@
 "use client"
 
-import { Leaf, User, LogOut, Calendar, Building2, Download } from 'lucide-react';
+import { Leaf, User, LogOut, Calendar, Building2, Download, UserPlus } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -14,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from 'react';
+import { subscribeToPendingUsers } from '@/lib/user-service';
 
 interface HeaderProps {
   onOpenCompanySettings?: () => void;
@@ -21,6 +23,7 @@ interface HeaderProps {
   onOpenProfile?: () => void;
   onOpenSchedule?: () => void;
   onOpenCompanyManagement?: () => void;
+  onOpenPendingUsers?: () => void;
 }
 
 export function Header({
@@ -28,16 +31,30 @@ export function Header({
   onExportMetrics,
   onOpenProfile,
   onOpenSchedule,
-  onOpenCompanyManagement
+  onOpenCompanyManagement,
+  onOpenPendingUsers
 }: HeaderProps) {
   const { user, userProfile, signOut, loading } = useAuth();
   const { toast } = useToast();
+  const [pendingUsersCount, setPendingUsersCount] = useState(0);
+
+  // Subscribe to pending users count for managers
+  useEffect(() => {
+    if (!userProfile?.companyId) return;
+    if (userProfile.role !== 'manager' && userProfile.role !== 'admin') return;
+
+    const unsubscribe = subscribeToPendingUsers(userProfile.companyId, (users) => {
+      setPendingUsersCount(users.length);
+    });
+
+    return () => unsubscribe();
+  }, [userProfile?.companyId, userProfile?.role]);
 
   // Debug logging
-  console.log('Header Auth State:', { 
-    user: user ? 'Present' : 'Missing', 
+  console.log('Header Auth State:', {
+    user: user ? 'Present' : 'Missing',
     userProfile: userProfile ? 'Present' : 'Missing',
-    loading 
+    loading
   });
 
   const handleSignOut = async () => {
@@ -109,6 +126,24 @@ export function Header({
             >
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Export</span>
+            </Button>
+          )}
+
+          {/* Pending Users Button - Only for managers and admins */}
+          {onOpenPendingUsers && userProfile && (userProfile.role === 'manager' || userProfile.role === 'admin') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenPendingUsers}
+              className="flex items-center gap-2 relative"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span className="hidden sm:inline">Pending</span>
+              {pendingUsersCount > 0 && (
+                <Badge variant="destructive" className="ml-1 h-5 w-5 flex items-center justify-center p-0 text-xs">
+                  {pendingUsersCount}
+                </Badge>
+              )}
             </Button>
           )}
 
