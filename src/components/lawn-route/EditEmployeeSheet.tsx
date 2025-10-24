@@ -129,7 +129,7 @@ export function EditEmployeeSheet({ open, onOpenChange, employee, onUpdateEmploy
   // Update form when employee changes
   React.useEffect(() => {
     if (employee) {
-      const schedule = employee.schedule || {};
+      const schedule = (employee.schedule || {}) as any;
 
       // Set enabled days based on what's in the schedule
       const newEnabledDays: Record<string, boolean> = {

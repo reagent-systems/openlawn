@@ -139,13 +139,13 @@ export function AddCrewSheet({ open, onOpenChange, onAddCrew, editingCrew, crewT
             <SheetHeader className="text-left">
               <SheetTitle>{editingCrew ? 'Edit Crew' : 'Create New Crew'}</SheetTitle>
               <SheetDescription>
-                {editingCrew ? 'Update crew assignments and service types.' : 'Assign employees to a crew and set the service type they\'ll handle.'}
+                {editingCrew ? 'Update crew assignments and service types.' : 'Assign employees to a crew and set the service type they will handle.'}
               </SheetDescription>
 
               {/* Time Analysis - Only show when editing a crew */}
               {editingCrew && crewTiming && (crewTiming.workTime > 0 || crewTiming.nonWorkTime > 0) && (
                 <div className="mt-4 p-4 bg-muted/30 rounded-lg border">
-                  <h4 className="text-sm font-semibold mb-2">Today's Time Breakdown</h4>
+                  <h4 className="text-sm font-semibold mb-2">Today&apos;s Time Breakdown</h4>
                   <TimeAnalysisBar
                     workTimeMinutes={crewTiming.workTime}
                     nonWorkTimeMinutes={crewTiming.nonWorkTime}

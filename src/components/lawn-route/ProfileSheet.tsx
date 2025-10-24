@@ -48,7 +48,7 @@ export function ProfileSheet({ open, onOpenChange }: ProfileSheetProps) {
     defaultValues: {
       displayName: userProfile?.displayName || "",
       email: user?.email || "",
-      phoneNumber: userProfile?.phoneNumber || "",
+      phoneNumber: userProfile?.phone || "",
     },
   })
 
@@ -58,7 +58,7 @@ export function ProfileSheet({ open, onOpenChange }: ProfileSheetProps) {
       form.reset({
         displayName: userProfile.displayName || "",
         email: user.email || "",
-        phoneNumber: userProfile.phoneNumber || "",
+        phoneNumber: userProfile.phone || "",
       });
     }
   }, [userProfile, user, form]);

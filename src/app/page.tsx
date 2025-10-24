@@ -14,13 +14,12 @@ import { AddCrewSheet } from "@/components/lawn-route/AddCrewSheet"
 import { CrewPopup } from "@/components/lawn-route/CrewPopup"
 import { CompanySettingsSheet } from "@/components/lawn-route/CompanySettingsSheet"
 import { EmployeeRouteView } from "@/components/lawn-route/EmployeeRouteView"
-import { ManagerAnalyticsDashboard } from "@/components/lawn-route/ManagerAnalyticsDashboard"
 import { Header } from "@/components/lawn-route/Header"
 import { TimeAnalysisBar } from "@/components/lawn-route/TimeAnalysisBar"
 import { ProfileSheet } from "@/components/lawn-route/ProfileSheet"
 import { ScheduleSheet } from "@/components/lawn-route/ScheduleSheet"
 import { CompanyManagementSheet } from "@/components/lawn-route/CompanyManagementSheet"
-import { Plus, User as UserIcon, Users, Building2, Settings } from "lucide-react"
+import { Plus, User as UserIcon, Users, Building2 } from "lucide-react"
 import { subscribeToCustomers, subscribeToAllCustomers, addCustomer } from "@/lib/customer-service"
 import { subscribeToUsers, subscribeToAllUsers } from "@/lib/user-service"
 import { generateOptimalRoutes } from "@/lib/route-service"
@@ -943,93 +942,6 @@ export default function LawnRoutePage() {
       </div>
     );
   }
-
-  // Render settings view
-  const renderSettingsView = () => {
-    if (isAdmin) {
-      // Admins don't have company-specific settings
-      return (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <Settings className="w-5 h-5" />
-              Admin Settings
-            </h2>
-          </div>
-
-          <div className="space-y-4 p-4">
-            <div className="p-4 border rounded-lg bg-card">
-              <h3 className="font-semibold mb-2">Admin Account</h3>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Role:</span>
-                  <span className="ml-2 font-medium">Super Administrator</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Access Level:</span>
-                  <span className="ml-2 font-medium">All Companies</span>
-                </div>
-                <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950 rounded-md">
-                  <p className="text-sm text-blue-900 dark:text-blue-100">
-                    As an admin, you have access to view all customers, employees, and data across all companies. You are not associated with a specific company.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Settings className="w-5 h-5" />
-            Company Settings
-          </h2>
-        </div>
-
-        <div className="space-y-4 p-4">
-          {/* Company Info */}
-          <div className="p-4 border rounded-lg bg-card">
-            <h3 className="font-semibold mb-2">Company Information</h3>
-            <div className="space-y-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">Company Name:</span>
-                <span className="ml-2 font-medium">{companyName || 'Loading...'}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Home Base:</span>
-                <span className="ml-2 font-medium">
-                  {baseLocation ? baseLocation.address : 'Not set'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Set Home Base Button */}
-          <div
-            onClick={() => setIsCompanySettingsOpen(true)}
-            className="p-4 border-2 border-dashed border-muted-foreground/30 rounded-lg cursor-pointer hover:border-primary hover:text-primary transition-all bg-secondary/50 flex flex-col items-center justify-center text-center"
-          >
-            <Settings className="w-10 h-10 mb-2" />
-            <p className="font-semibold">{baseLocation ? 'Update Home Base Location' : 'Set Home Base Location'}</p>
-            <p className="text-xs text-muted-foreground mt-1">Where crews start and end their day</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Render analytics view
-  const renderAnalyticsView = () => (
-    <ManagerAnalyticsDashboard
-      routes={timingRoutes}
-      users={users}
-      currentTime={new Date()}
-    />
-  )
 
   // Handler to reload base location after update
   const handleLocationUpdated = async () => {

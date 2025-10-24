@@ -28,7 +28,7 @@ export function CompanyManagementSheet({ open, onOpenChange }: CompanyManagement
 
   // Placeholder data - would come from Firebase in production
   const [companyData, setCompanyData] = React.useState({
-    name: userProfile?.companyName || "OpenLawn Company",
+    name: userProfile?.name || "OpenLawn Company",
     employeeCount: 0,
     subscriptionPlan: "Professional",
     subscriptionStatus: "Active",
@@ -36,7 +36,7 @@ export function CompanyManagementSheet({ open, onOpenChange }: CompanyManagement
     nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
   })
 
-  const [paymentInfo, setPaymentInfo] = React.useState({
+  const [_paymentInfo, _setPaymentInfo] = React.useState({
     cardLast4: "4242",
     cardBrand: "Visa",
     expiryDate: "12/25",
@@ -175,11 +175,11 @@ export function CompanyManagementSheet({ open, onOpenChange }: CompanyManagement
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-8 bg-gradient-to-br from-blue-600 to-blue-400 rounded flex items-center justify-center text-white font-bold text-xs">
-                    {paymentInfo.cardBrand}
+                    {_paymentInfo.cardBrand}
                   </div>
                   <div>
-                    <p className="font-medium">•••• •••• •••• {paymentInfo.cardLast4}</p>
-                    <p className="text-sm text-muted-foreground">Expires {paymentInfo.expiryDate}</p>
+                    <p className="font-medium">•••• •••• •••• {_paymentInfo.cardLast4}</p>
+                    <p className="text-sm text-muted-foreground">Expires {_paymentInfo.expiryDate}</p>
                   </div>
                 </div>
                 <Button

@@ -1,6 +1,6 @@
 "use client"
 
-import { Leaf, User, LogOut, Settings, Calendar, Building2, Download } from 'lucide-react';
+import { Leaf, User, LogOut, Calendar, Building2, Download } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';

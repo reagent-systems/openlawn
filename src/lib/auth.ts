@@ -177,7 +177,7 @@ export const signUpWithEmail = async (
 
     // Update display name if provided
     if (displayName) {
-      await updateProfile(userCredential.user, { displayName });
+      await firebaseUpdateProfile(userCredential.user, { displayName });
     }
 
     // Handle company assignment
@@ -315,7 +315,7 @@ export const updateProfile = async (updates: {
   // Update Firestore profile
   const firestoreUpdates: Partial<User> = {};
   if (updates.displayName !== undefined) firestoreUpdates.displayName = updates.displayName;
-  if (updates.phoneNumber !== undefined) firestoreUpdates.phoneNumber = updates.phoneNumber;
+  if (updates.phoneNumber !== undefined) firestoreUpdates.phone = updates.phoneNumber;
   if (updates.photoURL !== undefined) firestoreUpdates.photoURL = updates.photoURL;
 
   if (Object.keys(firestoreUpdates).length > 0) {

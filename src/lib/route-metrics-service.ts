@@ -24,7 +24,7 @@ export async function saveRouteMetrics(
   // Calculate metrics from route
   let totalDriveTime = 0;
   let totalWorkTime = 0;
-  let totalBreakTime = 0;
+  const totalBreakTime = 0;
 
   const stopMetrics = route.stops.map(stop => {
     const driveTime = stop.driveTime || 0;

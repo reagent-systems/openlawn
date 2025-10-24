@@ -67,8 +67,9 @@ export function ScheduleSheet({ open, onOpenChange }: ScheduleSheetProps) {
 
   // Get user schedule for a specific day
   const getScheduleForDay = (date: Date) => {
+    if (!userProfile?.schedule) return null;
     const dayName = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() as keyof typeof userProfile.schedule
-    return userProfile?.schedule?.[dayName]
+    return userProfile.schedule[dayName] as { start: string; end: string } | undefined
   }
 
   return (
