@@ -68,6 +68,7 @@ export interface User extends BaseDocument {
     timestamp: Timestamp;
   };
   status: 'available' | 'busy' | 'offline';
+  accountStatus: 'active' | 'pending' | 'disabled'; // Account lifecycle status (pending = awaiting manager approval)
   capabilities?: string[]; // Service types this user can handle
   region?: string; // Geographic area or zip code
 

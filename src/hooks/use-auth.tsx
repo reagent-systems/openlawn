@@ -181,14 +181,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const userCredential = await signUpWithEmail(email, password, displayName, role, companyName, companyId);
 
-      // Immediately fetch the user profile after signup
-      const userProfile = await getUserProfile(userCredential.user.uid);
-      setAuthState({
-        user: userCredential.user,
-        userProfile,
-        loading: false,
-        error: null,
-      });
+      // For employees, they are signed out immediately after signup (pending approval)
+      // So we don't try to fetch their profile - just clear the auth state
+      if (role === 'employee') {
+        setAuthState({
+          user: null,
+          userProfile: null,
+          loading: false,
+          error: null,
+        });
+      } else {
+        // For managers/admins, fetch the user profile after signup
+        const userProfile = await getUserProfile(userCredential.user.uid);
+        setAuthState({
+          user: userCredential.user,
+          userProfile,
+          loading: false,
+          error: null,
+        });
+      }
     } catch (error: any) {
       const errorMessage = getAuthErrorMessage(error.code);
       setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));

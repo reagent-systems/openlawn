@@ -42,6 +42,12 @@ service cloud.firestore {
       return isAuthenticated() && userData != null && userData.role in ['manager', 'admin'];
     }
 
+    // Check if user's account is active (not pending or disabled)
+    function isAccountActive() {
+      let userData = getUserData();
+      return userData != null && userData.accountStatus == 'active';
+    }
+
     // Check if user belongs to the same company as the resource
     function isSameCompany(resourceData) {
       let companyId = getUserCompanyId();
@@ -61,13 +67,16 @@ service cloud.firestore {
     match /companies/{companyId} {
       // Company owners can read/write their own company
       // Admins can read all companies
-      // Also allow users without a profile yet to search for companies (during signup)
+      // Users without profiles can search for companies during signup
       allow read: if isAuthenticated() && (
         isAdmin() ||
         resource.data.owner == request.auth.uid ||
         getUserCompanyId() == companyId ||
         !userExists()  // Allow reading during signup
       );
+
+      // Allow listing/querying companies for users without profiles (during employee signup)
+      allow list: if isAuthenticated() && !userExists();
 
       // Only authenticated users can create companies (during registration)
       allow create: if isAuthenticated() &&
@@ -83,31 +92,41 @@ service cloud.firestore {
     // ========================================
 
     match /users/{userId} {
-      // Users can read/write their own profile
+      // Users can read/write their own profile (even if pending)
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
 
       // Admins can read all users across all companies
-      allow read: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated() && isAdmin() && isAccountActive();
 
-      // Users can read other users in the same company
-      allow read: if isAuthenticated() && isSameCompany(resource.data);
+      // Active users can read other users in the same company
+      allow read: if isAuthenticated() && isAccountActive() && isSameCompany(resource.data);
 
-      // Managers in the same company can read all users in their company
+      // Managers in the same company can read all users in their company (including pending)
+      // This includes pending users (accountStatus: 'pending') awaiting approval
       allow read: if isAuthenticated() &&
+        isAccountActive() &&
         isManagerOrAdmin() &&
         isSameCompany(resource.data);
 
+      // Only active users or managers can list users
+      allow list: if isAuthenticated() && isAccountActive() && (
+        isAdmin() ||
+        (isManagerOrAdmin() && isSameCompany(resource.data))
+      );
+
       // Only users can create their own profile (during registration)
+      // Employees create with accountStatus: 'pending' (set by auth.ts)
       // OR managers/admins can create users in their company
       allow create: if isAuthenticated() && (
         request.auth.uid == userId ||
-        (isManagerOrAdmin() && isSameCompanyOnCreate())
+        (isManagerOrAdmin() && isAccountActive() && isSameCompanyOnCreate())
       );
 
       // Managers and admins can update users in their company
+      // This includes approving pending users (accountStatus: 'pending' -> 'active')
       allow update: if isAuthenticated() && (
         request.auth.uid == userId ||
-        (isManagerOrAdmin() && isSameCompany(resource.data))
+        (isManagerOrAdmin() && isAccountActive() && isSameCompany(resource.data))
       );
     }
 
@@ -117,25 +136,29 @@ service cloud.firestore {
 
     match /customers/{customerId} {
       // CRITICAL: All customer access MUST be filtered by company (except for admins)
+      // CRITICAL: Only active users can access customers
 
       // Admins can read all customers across all companies
-      allow read: if isAuthenticated() && isAdmin();
+      allow read: if isAuthenticated() && isAccountActive() && isAdmin();
 
-      // Users can only read customers in their company
-      allow read: if isAuthenticated() && isSameCompany(resource.data);
+      // Active users can only read customers in their company
+      allow read: if isAuthenticated() && isAccountActive() && isSameCompany(resource.data);
 
-      // Users can only create customers in their company
+      // Active users can only create customers in their company
       allow create: if isAuthenticated() &&
+        isAccountActive() &&
         isSameCompanyOnCreate() &&
         request.resource.data.createdBy == request.auth.uid;
 
-      // Users can update customers they created in their company
+      // Active users can update customers they created in their company
       allow update: if isAuthenticated() &&
+        isAccountActive() &&
         isSameCompany(resource.data) &&
         (resource.data.createdBy == request.auth.uid || isManagerOrAdmin());
 
       // Only managers/admins can delete customers in their company
       allow delete: if isAuthenticated() &&
+        isAccountActive() &&
         isManagerOrAdmin() &&
         isSameCompany(resource.data);
     }
@@ -146,15 +169,18 @@ service cloud.firestore {
 
     match /routes/{routeId} {
       // Routes are company-specific (admins can read all)
-      allow read: if isAuthenticated() && (isAdmin() || isSameCompany(resource.data));
+      // Only active users can access routes
+      allow read: if isAuthenticated() && isAccountActive() && (isAdmin() || isSameCompany(resource.data));
 
-      allow create: if isAuthenticated() && isSameCompanyOnCreate();
+      allow create: if isAuthenticated() && isAccountActive() && isSameCompanyOnCreate();
 
       allow update: if isAuthenticated() &&
+        isAccountActive() &&
         isSameCompany(resource.data) &&
         isManagerOrAdmin();
 
       allow delete: if isAuthenticated() &&
+        isAccountActive() &&
         isManagerOrAdmin() &&
         isSameCompany(resource.data);
     }
@@ -167,7 +193,8 @@ service cloud.firestore {
       // Route metrics are company-specific (admins can read all)
       // Employees in the crew can read their own metrics
       // Managers can read all metrics in their company
-      allow read: if isAuthenticated() && (
+      // Only active users can access metrics
+      allow read: if isAuthenticated() && isAccountActive() && (
         isAdmin() ||
         isSameCompany(resource.data) ||
         (isSameCompany(resource.data) && getUserData().crewId == resource.data.crewId)
@@ -175,6 +202,7 @@ service cloud.firestore {
 
       // Employees and managers can create metrics for their routes
       allow create: if isAuthenticated() &&
+        isAccountActive() &&
         isSameCompanyOnCreate() &&
         (
           getUserData().crewId == request.resource.data.crewId ||
@@ -183,11 +211,13 @@ service cloud.firestore {
 
       // Only managers can update metrics
       allow update: if isAuthenticated() &&
+        isAccountActive() &&
         isSameCompany(resource.data) &&
         isManagerOrAdmin();
 
       // Only managers can delete metrics
       allow delete: if isAuthenticated() &&
+        isAccountActive() &&
         isManagerOrAdmin() &&
         isSameCompany(resource.data);
     }

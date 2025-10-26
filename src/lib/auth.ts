@@ -40,6 +40,7 @@ const createUserProfile = async (user: FirebaseUser, companyId: string | undefin
     phone: '',
     role: 'employee', // Default role
     status: 'available',
+    accountStatus: 'active', // Default to active (can be overridden for employees)
   };
 
   // Only add companyId if it exists (admins don't have one)
@@ -133,6 +134,7 @@ export const getUserProfile = async (uid: string, retries = 3): Promise<User | n
           schedule: data.schedule,
           currentLocation: data.currentLocation,
           status: data.status || 'available',
+          accountStatus: data.accountStatus || 'active',
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
           displayName: data.displayName,
@@ -222,13 +224,20 @@ export const signUpWithEmail = async (
     }
 
     // Create user profile in Firestore
+    // Employees need manager approval, so set accountStatus to 'pending'
     await createUserProfile(userCredential.user, finalCompanyId, {
       name: displayName || '',
       role: userRole,
+      accountStatus: userRole === 'employee' ? 'pending' : 'active',
     });
 
     // Small delay to ensure Firestore write propagates (especially important for emulators)
     await new Promise(resolve => setTimeout(resolve, 100));
+
+    // If user is an employee, sign them out immediately - they need manager approval
+    if (userRole === 'employee') {
+      await signOut(auth);
+    }
 
     return userCredential;
   } catch (error) {
@@ -246,13 +255,30 @@ export const signInWithEmail = async (email: string, password: string): Promise<
     }
 
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    
+
+    // Check user's account status before allowing login
+    const userProfile = await getUserProfile(userCredential.user.uid);
+
+    if (userProfile) {
+      if (userProfile.accountStatus === 'pending') {
+        // Sign them out immediately if pending
+        await signOut(auth);
+        throw new Error('Your account is pending approval from your manager. You will receive an email once approved.');
+      }
+
+      if (userProfile.accountStatus === 'disabled') {
+        // Sign them out immediately if disabled
+        await signOut(auth);
+        throw new Error('Your account has been disabled. Please contact your manager.');
+      }
+    }
+
     // Update or create user profile
-    await updateUserProfile(userCredential.user.uid, { 
+    await updateUserProfile(userCredential.user.uid, {
       email: userCredential.user.email || email,
       name: userCredential.user.displayName || '',
     });
-    
+
     return userCredential;
   } catch (error) {
     console.error('Error signing in:', error);

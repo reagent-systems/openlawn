@@ -19,6 +19,8 @@ import { TimeAnalysisBar } from "@/components/lawn-route/TimeAnalysisBar"
 import { ProfileSheet } from "@/components/lawn-route/ProfileSheet"
 import { ScheduleSheet } from "@/components/lawn-route/ScheduleSheet"
 import { CompanyManagementSheet } from "@/components/lawn-route/CompanyManagementSheet"
+import { PendingUsersSheet } from "@/components/lawn-route/PendingUsersSheet"
+import { PendingApprovalScreen } from "@/components/auth/PendingApprovalScreen"
 import { Plus, User as UserIcon, Users, Building2 } from "lucide-react"
 import { subscribeToCustomers, subscribeToAllCustomers, addCustomer } from "@/lib/customer-service"
 import { subscribeToUsers, subscribeToAllUsers } from "@/lib/user-service"
@@ -64,6 +66,7 @@ export default function LawnRoutePage() {
   const [isProfileSheetOpen, setIsProfileSheetOpen] = useState(false)
   const [isScheduleSheetOpen, setIsScheduleSheetOpen] = useState(false)
   const [isCompanyManagementOpen, setIsCompanyManagementOpen] = useState(false)
+  const [isPendingUsersSheetOpen, setIsPendingUsersSheetOpen] = useState(false)
 
   // Generate human-readable crew IDs using animal names
   const generateCrewId = () => {
@@ -103,6 +106,7 @@ export default function LawnRoutePage() {
   useEffect(() => {
     const fetchCompanyData = async () => {
       if (!userProfile?.companyId) return;
+      if (userProfile.accountStatus === 'pending') return; // Skip for pending users
 
       try {
         const { getCompany } = await import('@/lib/company-service');
@@ -125,6 +129,7 @@ export default function LawnRoutePage() {
   // Subscribe to customers (admins see all, managers see company, employees see assigned)
   useEffect(() => {
     if (!userProfile) return
+    if (userProfile.accountStatus === 'pending') return // Skip for pending users
 
     if (isAdmin) {
       // Admins see ALL customers across all companies (real-time subscription)
@@ -180,6 +185,7 @@ export default function LawnRoutePage() {
   // Subscribe to users (for manager and admin view)
   useEffect(() => {
     if (!isManager || !userProfile) return
+    if (userProfile.accountStatus === 'pending') return // Skip for pending users
 
     if (isAdmin) {
       // Admins see ALL users across all companies
@@ -200,6 +206,7 @@ export default function LawnRoutePage() {
   // Generate routes for today and tomorrow (skip for admins who don't have a company)
   useEffect(() => {
     if (!userProfile?.companyId || isAdmin) return
+    if (userProfile.accountStatus === 'pending') return // Skip for pending users
 
     const generateRoutes = async () => {
       try {
@@ -761,24 +768,6 @@ export default function LawnRoutePage() {
       </div>
       
       <div className="space-y-4 p-4">
-      {/* Employee Join Instructions */}
-      <div className="p-4 border-2 border-blue-200 rounded-lg bg-blue-50 text-blue-900">
-        <div className="flex items-start gap-3">
-          <UserIcon className="w-5 h-5 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="font-semibold mb-1">How to add employees:</p>
-            <p className="text-sm mb-2">
-              Employees can join by signing up with your company name:
-            </p>
-            <ol className="text-sm space-y-1 list-decimal list-inside">
-              <li>Share your company name: <span className="font-semibold bg-white px-2 py-0.5 rounded">{companyName || 'Loading...'}</span></li>
-              <li>Have them sign up and select &quot;Employee&quot; role</li>
-              <li>They enter your exact company name to join</li>
-            </ol>
-          </div>
-        </div>
-      </div>
-
       {/* Existing employees */}
       {users.filter(user => user.role === 'employee' || user.role === 'manager').map((user) => (
         <div
@@ -809,6 +798,31 @@ export default function LawnRoutePage() {
           </div>
         </div>
       ))}
+
+      {/* Employee Self-Signup Instructions Card */}
+      <div className="p-4 border-2 border-blue-200 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-900">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <UserIcon className="w-5 h-5" />
+            <p className="font-semibold text-base">Add Employees</p>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">1</span>
+              <p>Share company name: <span className="font-bold bg-white px-2 py-1 rounded shadow-sm">{companyName || 'Loading...'}</span></p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">2</span>
+              <p>Employee signs up with &quot;Employee&quot; role</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">3</span>
+              <p>You approve in <span className="font-semibold">&quot;Pending&quot;</span> tab</p>
+            </div>
+          </div>
+        </div>
+      </div>
       </div>
     </div>
   )
@@ -957,6 +971,11 @@ export default function LawnRoutePage() {
     }
   }
 
+  // If user is pending approval, show the pending approval screen
+  if (userProfile?.accountStatus === 'pending') {
+    return <PendingApprovalScreen />
+  }
+
   if (isManager) {
     return (
       <ProtectedRoute>
@@ -967,6 +986,7 @@ export default function LawnRoutePage() {
             onOpenProfile={() => setIsProfileSheetOpen(true)}
             onOpenSchedule={() => setIsScheduleSheetOpen(true)}
             onOpenCompanyManagement={() => setIsCompanyManagementOpen(true)}
+            onOpenPendingUsers={() => setIsPendingUsersSheetOpen(true)}
           />
           <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
             <div className="md:col-span-2 h-full w-full">
@@ -1127,6 +1147,12 @@ export default function LawnRoutePage() {
           <CompanyManagementSheet
             open={isCompanyManagementOpen}
             onOpenChange={setIsCompanyManagementOpen}
+          />
+
+          {/* Pending Users Sheet (Manager/Admin Only) */}
+          <PendingUsersSheet
+            open={isPendingUsersSheetOpen}
+            onOpenChange={setIsPendingUsersSheetOpen}
           />
         </div>
       </ProtectedRoute>

@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PendingApprovalScreen } from './PendingApprovalScreen';
 
 interface AuthFormProps {
   onSuccess?: () => void;
@@ -22,6 +23,14 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Check sessionStorage for pending status on mount
+  const [showPendingScreen, setShowPendingScreen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('pendingApproval') === 'true';
+    }
+    return false;
+  });
 
   // Sign In Form
   const [signInData, setSignInData] = useState({
@@ -54,6 +63,8 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
 
     try {
       await signIn(signInData.email, signInData.password);
+      // Clear pending approval flag on successful signin
+      sessionStorage.removeItem('pendingApproval');
       toast({
         title: "Success",
         description: "Signed in successfully",
@@ -113,15 +124,29 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
         signUpData.role,
         signUpData.companyName || undefined
       );
-      toast({
-        title: "Success",
-        description: "Account created successfully",
-      });
-      onSuccess?.();
+
+      // Check if employee signed up - they need manager approval
+      if (signUpData.role === 'employee') {
+        sessionStorage.setItem('pendingApproval', 'true');
+        setShowPendingScreen(true);
+      } else {
+        // Clear pending approval flag for managers/admins
+        sessionStorage.removeItem('pendingApproval');
+        toast({
+          title: "Success",
+          description: "Account created successfully",
+        });
+        onSuccess?.();
+      }
     } catch {
       // Error is handled by the auth hook
     }
   };
+
+  // Show pending approval screen for employees
+  if (showPendingScreen) {
+    return <PendingApprovalScreen />;
+  }
 
   return (
     <Card className="w-full max-w-md mx-auto">
