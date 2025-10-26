@@ -768,24 +768,6 @@ export default function LawnRoutePage() {
       </div>
       
       <div className="space-y-4 p-4">
-      {/* Employee Join Instructions */}
-      <div className="p-4 border-2 border-blue-200 rounded-lg bg-blue-50 text-blue-900">
-        <div className="flex items-start gap-3">
-          <UserIcon className="w-5 h-5 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="font-semibold mb-1">How to add employees:</p>
-            <p className="text-sm mb-2">
-              Employees can join by signing up with your company name:
-            </p>
-            <ol className="text-sm space-y-1 list-decimal list-inside">
-              <li>Share your company name: <span className="font-semibold bg-white px-2 py-0.5 rounded">{companyName || 'Loading...'}</span></li>
-              <li>Have them sign up and select &quot;Employee&quot; role</li>
-              <li>They enter your exact company name to join</li>
-            </ol>
-          </div>
-        </div>
-      </div>
-
       {/* Existing employees */}
       {users.filter(user => user.role === 'employee' || user.role === 'manager').map((user) => (
         <div
@@ -816,6 +798,31 @@ export default function LawnRoutePage() {
           </div>
         </div>
       ))}
+
+      {/* Employee Self-Signup Instructions Card */}
+      <div className="p-4 border-2 border-blue-200 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-900">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <UserIcon className="w-5 h-5" />
+            <p className="font-semibold text-base">Add Employees</p>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">1</span>
+              <p>Share company name: <span className="font-bold bg-white px-2 py-1 rounded shadow-sm">{companyName || 'Loading...'}</span></p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">2</span>
+              <p>Employee signs up with &quot;Employee&quot; role</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">3</span>
+              <p>You approve in <span className="font-semibold">&quot;Pending&quot;</span> tab</p>
+            </div>
+          </div>
+        </div>
+      </div>
       </div>
     </div>
   )
