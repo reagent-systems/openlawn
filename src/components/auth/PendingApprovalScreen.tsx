@@ -53,7 +53,7 @@ export const PendingApprovalScreen: React.FC = () => {
             <p className="font-medium">What happens next?</p>
             <ol className="list-decimal list-inside space-y-1 ml-2">
               <li>Your manager will review your registration request</li>
-              <li>You'll receive an email once approved</li>
+              <li>You&apos;ll receive an email once approved</li>
               <li>After approval, you can sign in and start using OpenLawn</li>
             </ol>
           </div>
