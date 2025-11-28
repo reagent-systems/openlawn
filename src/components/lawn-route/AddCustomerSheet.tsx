@@ -46,7 +46,7 @@ const formSchema = z.object({
     lng: z.number().optional(),
   }).optional(),
   notes: z.string().optional(),
-  serviceType: z.enum(['push-mow', 'edge', 'blow', 'detail', 'riding-mow']),
+  serviceTypes: z.array(z.string()).min(1, { message: "At least one service type is required." }),
   servicePreferences: z.object({
     preferredDays: z.array(z.enum(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])).default([]),
     preferredTimeRange: z.object({
@@ -76,7 +76,7 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
       address: "",
       coordinates: undefined,
       notes: "",
-      serviceType: "push-mow",
+      serviceTypes: ["push-mow"],
       servicePreferences: {
         preferredDays: [],
         preferredTimeRange: {
@@ -170,24 +170,45 @@ export function AddCustomerSheet({ open, onOpenChange, onAddCustomer }: AddCusto
               />
               <FormField
                 control={form.control}
-                name="serviceType"
-                render={({ field }) => (
+                name="serviceTypes"
+                render={() => (
                   <FormItem>
-                    <FormLabel>Service Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select service type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {SERVICE_TYPES.map((service) => (
-                          <SelectItem key={service.value} value={service.value}>
-                            {service.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>Service Types</FormLabel>
+                    <div className="space-y-3">
+                      {SERVICE_TYPES.map((service) => (
+                        <FormField
+                          key={service.value}
+                          control={form.control}
+                          name="serviceTypes"
+                          render={({ field }) => {
+                            return (
+                              <FormItem
+                                key={service.value}
+                                className="flex flex-row items-start space-x-3 space-y-0"
+                              >
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value?.includes(service.value)}
+                                    onCheckedChange={(checked) => {
+                                      return checked
+                                        ? field.onChange([...field.value, service.value])
+                                        : field.onChange(
+                                            field.value?.filter(
+                                              (value) => value !== service.value
+                                            )
+                                          )
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormLabel className="text-sm font-normal cursor-pointer">
+                                  {service.label}
+                                </FormLabel>
+                              </FormItem>
+                            )
+                          }}
+                        />
+                      ))}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -65,7 +65,7 @@ const formSchema = z.object({
     lng: z.number().optional(),
   }).optional(),
   notes: z.string().optional(),
-  serviceType: z.enum(['push-mow', 'edge', 'blow', 'detail', 'riding-mow']),
+  serviceTypes: z.array(z.string()).min(1, { message: "At least one service type is required." }),
   servicePreferences: z.object({
     preferredDays: z.array(z.enum(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])).default([]),
     preferredTimeRange: z.object({
@@ -98,7 +98,7 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
       address: "",
       coordinates: undefined,
       notes: "",
-      serviceType: "push-mow",
+      serviceTypes: ["push-mow"],
       servicePreferences: {
         preferredDays: [],
         preferredTimeRange: {
@@ -114,7 +114,8 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
   // Update form when customer changes
   React.useEffect(() => {
     if (customer) {
-      const serviceType = customer.services?.[0]?.type || 'push-mow';
+      // Extract all service types from customer's services array
+      const serviceTypes = customer.services?.map(service => service.type) || ['push-mow'];
       const frequency = customer.servicePreferences?.serviceFrequency || 7;
       const serviceFrequency = frequency === 7 ? 'weekly' : 
                              frequency === 14 ? 'biweekly' : 
@@ -125,7 +126,7 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
         address: customer.address,
         coordinates: { lat: customer.lat, lng: customer.lng },
         notes: customer.notes || '',
-        serviceType: serviceType as any,
+        serviceTypes: serviceTypes,
         servicePreferences: {
           preferredDays: customer.servicePreferences?.preferredDays || [],
           preferredTimeRange: customer.servicePreferences?.preferredTimeRange || { start: "08:00", end: "17:00" },
@@ -255,24 +256,45 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
                 />
                 <FormField
                   control={form.control}
-                  name="serviceType"
-                  render={({ field }) => (
+                  name="serviceTypes"
+                  render={() => (
                     <FormItem>
-                      <FormLabel>Service Type</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select service type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {SERVICE_TYPES.map((service) => (
-                            <SelectItem key={service.value} value={service.value}>
-                              {service.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>Service Types</FormLabel>
+                      <div className="space-y-3">
+                        {SERVICE_TYPES.map((service) => (
+                          <FormField
+                            key={service.value}
+                            control={form.control}
+                            name="serviceTypes"
+                            render={({ field }) => {
+                              return (
+                                <FormItem
+                                  key={service.value}
+                                  className="flex flex-row items-start space-x-3 space-y-0"
+                                >
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(service.value)}
+                                      onCheckedChange={(checked) => {
+                                        return checked
+                                          ? field.onChange([...field.value, service.value])
+                                          : field.onChange(
+                                              field.value?.filter(
+                                                (value) => value !== service.value
+                                              )
+                                            )
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal cursor-pointer">
+                                    {service.label}
+                                  </FormLabel>
+                                </FormItem>
+                              )
+                            }}
+                          />
+                        ))}
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}

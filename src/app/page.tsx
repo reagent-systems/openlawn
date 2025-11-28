@@ -467,6 +467,16 @@ export default function LawnRoutePage() {
         throw new Error('User company ID not found');
       }
 
+      // Create a service for each selected service type
+      const services = (data.serviceTypes || []).map((serviceType: string, index: number) => ({
+        id: `${Date.now()}-${index}`,
+        type: serviceType,
+        description: `${serviceType} service`,
+        price: 0,
+        scheduledDate: new Date() as any,
+        status: 'scheduled' as const,
+      }));
+
       const newCustomer: Omit<Customer, 'id' | 'createdAt' | 'updatedAt'> = {
         companyId: userProfile.companyId, // REQUIRED: Multi-tenant isolation
         name: data.name,
@@ -476,14 +486,7 @@ export default function LawnRoutePage() {
         notes: data.notes || '',
         billingInfo: {},
         status: 'active',
-        services: [{
-          id: Date.now().toString(),
-          type: data.serviceType,
-          description: `${data.serviceType} service`,
-          price: 0,
-          scheduledDate: new Date() as any,
-          status: 'scheduled',
-        }],
+        services: services,
         createdBy: userProfile?.id || '',
         servicePreferences: {
           preferredDays: data.servicePreferences.preferredDays,
@@ -510,20 +513,41 @@ export default function LawnRoutePage() {
     try {
       const { updateDocument } = await import('@/lib/firebase-services');
       
+      // Create services array from selected service types
+      // Preserve existing service data where possible, create new ones for new types
+      const existingServicesMap = new Map(
+        (editingCustomer.services || []).map(service => [service.type, service])
+      );
+      
+      const services = (data.serviceTypes || []).map((serviceType: string, index: number) => {
+        const existingService = existingServicesMap.get(serviceType);
+        if (existingService) {
+          // Preserve existing service data
+          return {
+            ...existingService,
+            type: serviceType,
+            description: existingService.description || `${serviceType} service`,
+          };
+        } else {
+          // Create new service
+          return {
+            id: `${Date.now()}-${index}`,
+            type: serviceType,
+            description: `${serviceType} service`,
+            price: 0,
+            scheduledDate: new Date() as any,
+            status: 'scheduled' as const,
+          };
+        }
+      });
+
       await updateDocument('customers', editingCustomer.id, {
         name: data.name,
         address: data.address,
         lat: Number(data.coordinates?.lat || editingCustomer.lat),
         lng: Number(data.coordinates?.lng || editingCustomer.lng),
         notes: data.notes || '',
-        services: [{
-          id: editingCustomer.services[0]?.id || Date.now().toString(),
-          type: data.serviceType,
-          description: `${data.serviceType} service`,
-          price: editingCustomer.services[0]?.price || 0,
-          scheduledDate: editingCustomer.services[0]?.scheduledDate || new Date() as any,
-          status: editingCustomer.services[0]?.status || 'scheduled',
-        }],
+        services: services,
         servicePreferences: {
           preferredDays: data.servicePreferences.preferredDays,
           preferredTimeRange: data.servicePreferences.preferredTimeRange,
