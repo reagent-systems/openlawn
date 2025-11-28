@@ -65,6 +65,7 @@ const formSchema = z.object({
     lng: z.number().optional(),
   }).optional(),
   notes: z.string().optional(),
+  monthlyRate: z.number().min(0).optional(),
   serviceTypes: z.array(z.string()).min(1, { message: "At least one service type is required." }),
   servicePreferences: z.object({
     preferredDays: z.array(z.enum(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])).default([]),
@@ -98,6 +99,7 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
       address: "",
       coordinates: undefined,
       notes: "",
+      monthlyRate: undefined,
       serviceTypes: ["push-mow"],
       servicePreferences: {
         preferredDays: [],
@@ -126,6 +128,7 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
         address: customer.address,
         coordinates: { lat: customer.lat, lng: customer.lng },
         notes: customer.notes || '',
+        monthlyRate: customer.monthlyRate,
         serviceTypes: serviceTypes,
         servicePreferences: {
           preferredDays: customer.servicePreferences?.preferredDays || [],
@@ -307,6 +310,30 @@ export function EditCustomerSheet({ open, onOpenChange, customer, onUpdateCustom
                       <FormLabel>Notes</FormLabel>
                       <FormControl>
                         <Textarea placeholder="Any important details..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="monthlyRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Monthly Rate ($)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="0.00"
+                          {...field}
+                          value={field.value || ''}
+                          onChange={(e) => {
+                            const value = e.target.value === '' ? undefined : parseFloat(e.target.value)
+                            field.onChange(isNaN(value as number) ? undefined : value)
+                          }}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

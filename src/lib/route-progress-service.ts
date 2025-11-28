@@ -1,5 +1,6 @@
 import { calculateDistance } from './location-utils'
 import type { Route, RouteStop } from './types'
+import { clockInAtLocation, clockOutAtLocation } from './clock-service'
 
 export interface RouteProgress {
   crewId: string
@@ -407,11 +408,12 @@ export class RouteProgressCalculator {
   ): Route {
     const updatedStops = route.stops.map(stop => {
       if (stop.customerId === customerId) {
-        return {
+        // Use clock service to clock in
+        const clockedInStop = clockInAtLocation({
           ...stop,
-          status: 'in_progress' as const,
           actualArrival: arrivalTime
-        }
+        })
+        return clockedInStop
       }
       return stop
     })
@@ -437,10 +439,15 @@ export class RouteProgressCalculator {
     const stop = route.stops[stopIndex]
     const previousStop = stopIndex > 0 ? route.stops[stopIndex - 1] : null
 
-    // Calculate work time
-    const workTime = stop.actualArrival
+    // Use clock service to clock out
+    const clockedOutStop = clockOutAtLocation({
+      ...stop
+    }, departureTime)
+
+    // Calculate work time (use from clockedOutStop if available, otherwise calculate)
+    const workTime = clockedOutStop.workTime || (stop.actualArrival
       ? Math.round((departureTime.getTime() - (stop.actualArrival instanceof Date ? stop.actualArrival.getTime() : new Date(stop.actualArrival).getTime())) / 1000 / 60)
-      : undefined
+      : undefined)
 
     // Calculate drive time from previous stop
     const driveTime = previousStop?.actualDeparture && stop.actualArrival
@@ -453,10 +460,7 @@ export class RouteProgressCalculator {
     const updatedStops = route.stops.map((s, idx) => {
       if (idx === stopIndex) {
         return {
-          ...s,
-          status: 'completed' as const,
-          actualDeparture: departureTime,
-          workTime,
+          ...clockedOutStop,
           driveTime
         }
       }

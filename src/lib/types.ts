@@ -104,6 +104,11 @@ export type RouteStop = {
   notes?: string; // Employee notes per stop
   pausedAt?: Date; // If stop was paused
   resumedAt?: Date; // If stop was resumed
+  
+  // Employee hours clocking
+  clockInTime?: Date; // When employee clocked in at this location
+  clockOutTime?: Date; // When employee clocked out at this location
+  totalHoursAtLocation?: number; // Calculated total hours worked at location (in hours)
 };
 
 // Schedule status types

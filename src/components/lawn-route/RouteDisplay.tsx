@@ -8,7 +8,9 @@ import {
   DirectionsRenderer,
 } from '@react-google-maps/api'
 import type { Customer, User, DailyRoute } from '@/lib/firebase-types'
-import { Loader2, AlertTriangle } from 'lucide-react'
+import { Loader2, AlertTriangle, MapPin } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { generateGoogleMapsRouteUrl } from '@/lib/maps-utils'
 
 interface RouteDisplayProps {
   customers: Customer[]
@@ -217,14 +219,44 @@ export function RouteDisplay({
     )
   }
 
+  // Handle opening route in Google Maps
+  const handleOpenInGoogleMaps = () => {
+    if (routes.length === 0) return
+    
+    // If there's a selected route (tomorrow route), use that
+    // Otherwise use the first route (today's route)
+    const routeToOpen = selectedRouteIndex !== null 
+      ? routes[selectedRouteIndex] 
+      : routes.find(r => isTodayRoute(r)) || routes[0]
+    
+    if (!routeToOpen) return
+    
+    const url = generateGoogleMapsRouteUrl(routeToOpen, baseLocation)
+    window.open(url, '_blank')
+  }
+
   return (
-    <GoogleMap
-      mapContainerStyle={containerStyle}
-      center={center}
-      zoom={12}
-      options={mapOptions}
-      onLoad={(map) => {mapRef.current = map}}
-    >
+    <div className="relative h-full w-full">
+      {/* Floating action button to open in Google Maps */}
+      {routes.length > 0 && (
+        <Button
+          onClick={handleOpenInGoogleMaps}
+          className="absolute top-4 right-4 z-10 shadow-lg"
+          size="sm"
+          variant="default"
+        >
+          <MapPin className="w-4 h-4 mr-2" />
+          Open in Google Maps
+        </Button>
+      )}
+      
+      <GoogleMap
+        mapContainerStyle={containerStyle}
+        center={center}
+        zoom={12}
+        options={mapOptions}
+        onLoad={(map) => {mapRef.current = map}}
+      >
       {/* Customer markers */}
       {customers.map((customer) => {
         // Ensure lat/lng are numbers
@@ -342,6 +374,7 @@ export function RouteDisplay({
           />
         );
       })}
-    </GoogleMap>
+      </GoogleMap>
+    </div>
   )
 } 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
@@ -14,6 +14,7 @@ import { AddCrewSheet } from "@/components/lawn-route/AddCrewSheet"
 import { CrewPopup } from "@/components/lawn-route/CrewPopup"
 import { CompanySettingsSheet } from "@/components/lawn-route/CompanySettingsSheet"
 import { EmployeeRouteView } from "@/components/lawn-route/EmployeeRouteView"
+import { PaymentSheet } from "@/components/lawn-route/PaymentSheet"
 import { Header } from "@/components/lawn-route/Header"
 import { TimeAnalysisBar } from "@/components/lawn-route/TimeAnalysisBar"
 import { ProfileSheet } from "@/components/lawn-route/ProfileSheet"
@@ -43,6 +44,9 @@ export default function LawnRoutePage() {
   const [timingRoutes, setTimingRoutes] = useState<Route[]>([]) // For timing features
   const [companyName, setCompanyName] = useState<string>('')
   const [baseLocation, setBaseLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
+  
+  // Track notified customers for delay notifications (persists across renders)
+  const notifiedCustomersRef = useRef<Set<string>>(new Set())
 
   // State for manager view
   const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews'>('customers')
@@ -67,6 +71,8 @@ export default function LawnRoutePage() {
   const [isScheduleSheetOpen, setIsScheduleSheetOpen] = useState(false)
   const [isCompanyManagementOpen, setIsCompanyManagementOpen] = useState(false)
   const [isPendingUsersSheetOpen, setIsPendingUsersSheetOpen] = useState(false)
+  const [isPaymentSheetOpen, setIsPaymentSheetOpen] = useState(false)
+  const [paymentCustomer, setPaymentCustomer] = useState<Customer | null>(null)
 
   // Generate human-readable crew IDs using animal names
   const generateCrewId = () => {
@@ -248,6 +254,28 @@ export default function LawnRoutePage() {
           pathLength: route.optimizedPath?.length || 0
         })));
         setRoutes(allRoutes)
+
+        // Send "scheduled today" notifications for today's routes
+        const isTodayRoute = (routeDate: Date) => {
+          const route = new Date(routeDate)
+          return route.toDateString() === today.toDateString()
+        }
+
+        todayRoutes.forEach(async (route) => {
+          if (isTodayRoute(route.date)) {
+            const { sendServiceScheduledNotification } = await import('@/lib/email-service')
+            route.customers.forEach(async (customer) => {
+              if (customer.billingInfo?.email) {
+                // Get crew name from users if available, otherwise use crewId
+                const crewMember = users.find(u => u.crewId === route.crewId)
+                const crewName = crewMember?.crewName || route.crewId
+                const firstStop = route.customers[0]
+                const estimatedTime = firstStop ? 'morning' : 'today'
+                await sendServiceScheduledNotification(customer, estimatedTime, crewName)
+              }
+            })
+          }
+        })
       } catch (error) {
         console.error('Error generating routes:', error)
         toast({
@@ -267,6 +295,49 @@ export default function LawnRoutePage() {
     setTimingRoutes(converted)
   }, [routes])
 
+  // Monitor for delays and send late notifications
+  useEffect(() => {
+    if (timingRoutes.length === 0) return
+
+    const checkForDelays = async () => {
+      const { sendLateNotification } = await import('@/lib/email-service')
+      const { calculateScheduleStatus } = await import('@/lib/schedule-status-service')
+
+      timingRoutes.forEach((route) => {
+        const status = calculateScheduleStatus(route, new Date())
+        
+        // If significantly delayed (more than 15 minutes), send notifications
+        if (status.status === 'behind' && status.minutesDelta >= 15) {
+          route.stops.forEach(async (stop) => {
+            // Only send if stop is pending (not yet arrived) and not already notified
+            if (stop.status === 'pending' && !notifiedCustomersRef.current.has(stop.customerId)) {
+              const customer = customers.find(c => c.id === stop.customerId)
+              if (customer?.billingInfo?.email) {
+                const estimatedArrival = stop.estimatedArrival || 
+                  new Date(Date.now() + status.minutesDelta * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                await sendLateNotification(customer, status.minutesDelta, estimatedArrival)
+                notifiedCustomersRef.current.add(stop.customerId)
+              }
+            }
+          })
+        } else {
+          // If back on schedule, clear notifications for completed stops
+          route.stops.forEach(stop => {
+            if (stop.status !== 'pending') {
+              notifiedCustomersRef.current.delete(stop.customerId)
+            }
+          })
+        }
+      })
+    }
+
+    // Check every 5 minutes for delays
+    const interval = setInterval(checkForDelays, 5 * 60 * 1000)
+    checkForDelays() // Initial check
+
+    return () => clearInterval(interval)
+  }, [timingRoutes, customers])
+
   // Handler functions for stop timing
   const handleStopArrival = async (customerId: string) => {
     if (timingRoutes.length === 0) return
@@ -284,6 +355,13 @@ export default function LawnRoutePage() {
     const newTimingRoutes = [...timingRoutes]
     newTimingRoutes[routeIndex] = updatedRoute
     setTimingRoutes(newTimingRoutes)
+
+    // Send "service started" notification
+    const customer = customers.find(c => c.id === customerId)
+    if (customer) {
+      const { sendServiceStartedNotification } = await import('@/lib/email-service')
+      await sendServiceStartedNotification(customer)
+    }
 
     toast({
       title: "Arrived",
@@ -547,6 +625,7 @@ export default function LawnRoutePage() {
         lat: Number(data.coordinates?.lat || editingCustomer.lat),
         lng: Number(data.coordinates?.lng || editingCustomer.lng),
         notes: data.notes || '',
+        monthlyRate: data.monthlyRate,
         services: services,
         servicePreferences: {
           preferredDays: data.servicePreferences.preferredDays,
@@ -1212,10 +1291,18 @@ export default function LawnRoutePage() {
               {timingRoutes.length > 0 ? (
                 <EmployeeRouteView
                   route={timingRoutes[0]}
+                  customers={customers}
                   onStopArrival={handleStopArrival}
                   onStopDeparture={handleStopDeparture}
                   onStopPause={handleStopPause}
                   onStopResume={handleStopResume}
+                  onTakePayment={(customerId) => {
+                    const customer = customers.find(c => c.id === customerId)
+                    if (customer) {
+                      setPaymentCustomer(customer)
+                      setIsPaymentSheetOpen(true)
+                    }
+                  }}
                 />
               ) : (
                 <div className="p-4">
@@ -1263,6 +1350,21 @@ export default function LawnRoutePage() {
         <CompanyManagementSheet
           open={isCompanyManagementOpen}
           onOpenChange={setIsCompanyManagementOpen}
+        />
+
+        {/* Payment Sheet */}
+        <PaymentSheet
+          open={isPaymentSheetOpen}
+          onOpenChange={(open) => {
+            setIsPaymentSheetOpen(open)
+            if (!open) {
+              setPaymentCustomer(null)
+            }
+          }}
+          customer={paymentCustomer}
+          onPaymentComplete={() => {
+            // Refresh customer data if needed
+          }}
         />
       </div>
     </ProtectedRoute>

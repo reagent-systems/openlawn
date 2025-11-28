@@ -4,8 +4,9 @@ import * as React from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Clock, Play, Square, MapPin, Pause } from "lucide-react"
+import { Clock, Play, Square, MapPin, Pause, LogIn, LogOut, CreditCard } from "lucide-react"
 import type { RouteStop } from "@/lib/types"
+import { getHoursAtLocation, formatHours, isClockedIn } from "@/lib/clock-service"
 
 interface StopTimerProps {
   stop: RouteStop
@@ -13,6 +14,7 @@ interface StopTimerProps {
   onDepart: () => void
   onPause?: () => void
   onResume?: () => void
+  onTakePayment?: () => void
   showTimer?: boolean
   disabled?: boolean
 }
@@ -28,6 +30,7 @@ export function StopTimer({
   onDepart,
   onPause,
   onResume,
+  onTakePayment,
   showTimer = true,
   disabled = false
 }: StopTimerProps) {
@@ -152,8 +155,47 @@ export function StopTimer({
           </div>
         )}
 
+        {/* Clock In/Out Times Display */}
+        {(stop.clockInTime || stop.clockOutTime) && (
+          <div className="space-y-2 p-4 bg-blue-50 rounded-lg">
+            {stop.clockInTime && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <LogIn className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-800">Clocked In:</span>
+                </div>
+                <span className="text-sm font-bold text-blue-800">
+                  {new Date(stop.clockInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
+            {stop.clockOutTime && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <LogOut className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-800">Clocked Out:</span>
+                </div>
+                <span className="text-sm font-bold text-green-800">
+                  {new Date(stop.clockOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
+            {stop.totalHoursAtLocation !== undefined && (
+              <div className="flex items-center justify-between pt-2 border-t border-blue-200">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-800">Total Hours:</span>
+                </div>
+                <span className="text-sm font-bold text-blue-800">
+                  {formatHours(stop.totalHoursAtLocation)}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Completed Time Display */}
-        {stop.status === 'completed' && stop.workTime && (
+        {stop.status === 'completed' && stop.workTime && !stop.totalHoursAtLocation && (
           <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-green-600" />
@@ -161,6 +203,19 @@ export function StopTimer({
             </div>
             <span className="text-lg font-bold text-green-800">
               {stop.workTime} min
+            </span>
+          </div>
+        )}
+
+        {/* Current Hours Display (if clocked in but not out) */}
+        {isClockedIn(stop) && (
+          <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-600" />
+              <span className="text-sm font-medium text-blue-800">Hours Worked:</span>
+            </div>
+            <span className="text-lg font-bold text-blue-800">
+              {formatHours(getHoursAtLocation(stop))}
             </span>
           </div>
         )}
@@ -173,20 +228,31 @@ export function StopTimer({
               disabled={disabled}
               className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
-              <Play className="w-4 h-4 mr-2" />
-              Arrive at Stop
+              <LogIn className="w-4 h-4 mr-2" />
+              Clock In & Arrive
             </Button>
           )}
 
           {stop.status === 'in_progress' && !isPaused && (
             <>
+              {onTakePayment && (
+                <Button
+                  onClick={onTakePayment}
+                  disabled={disabled}
+                  variant="outline"
+                  className="flex-1 border-blue-600 text-blue-600 hover:bg-blue-50"
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Take Payment
+                </Button>
+              )}
               <Button
                 onClick={onDepart}
                 disabled={disabled}
                 className="flex-1 bg-green-600 hover:bg-green-700"
               >
-                <Square className="w-4 h-4 mr-2" />
-                Complete & Depart
+                <LogOut className="w-4 h-4 mr-2" />
+                Clock Out & Complete
               </Button>
               {onPause && (
                 <Button

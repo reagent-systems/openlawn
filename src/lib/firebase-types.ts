@@ -136,6 +136,8 @@ export interface Customer extends BaseDocument {
     phone?: string;
     paymentMethod?: string;
   };
+  monthlyRate?: number; // Monthly rate set by manager (in dollars)
+  paymentHistory?: PaymentRecord[]; // History of payments collected
   status: 'active' | 'inactive' | 'pending';
   services: Service[]; // Embedded services array
   lastServiceDate?: Timestamp; // For 5-day rolling prioritization
@@ -151,6 +153,19 @@ export interface Customer extends BaseDocument {
   
   // Service history with photos
   serviceHistory: ServiceRecord[];
+}
+
+// Payment record for tracking payments collected
+export interface PaymentRecord {
+  id: string;
+  amount: number; // Amount in dollars
+  date: Timestamp;
+  employeeId: string; // Employee who collected the payment
+  employeeName?: string;
+  paymentMethod: 'card' | 'cash' | 'check' | 'other';
+  stripePaymentIntentId?: string; // If paid via Stripe
+  notes?: string;
+  status: 'completed' | 'pending' | 'failed';
 }
 
 // Route optimization interfaces

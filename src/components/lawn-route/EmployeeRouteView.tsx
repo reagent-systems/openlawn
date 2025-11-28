@@ -9,13 +9,17 @@ import { PerStopTimingTable } from "./PerStopTimingTable"
 import type { Route } from "@/lib/types"
 import { autoDetectArrival } from "@/lib/route-tracking-service"
 
+import type { Customer } from '@/lib/firebase-types'
+
 interface EmployeeRouteViewProps {
   route: Route
+  customers?: Customer[]
   employeeLocation?: { lat: number; lng: number }
   onStopArrival: (customerId: string) => void
   onStopDeparture: (customerId: string) => void
   onStopPause?: (customerId: string) => void
   onStopResume?: (customerId: string) => void
+  onTakePayment?: (customerId: string) => void
 }
 
 /**
@@ -29,11 +33,13 @@ interface EmployeeRouteViewProps {
  */
 export function EmployeeRouteView({
   route,
+  customers = [],
   employeeLocation,
   onStopArrival,
   onStopDeparture,
   onStopPause,
-  onStopResume
+  onStopResume,
+  onTakePayment
 }: EmployeeRouteViewProps) {
   const [currentTime, setCurrentTime] = React.useState(new Date())
 
@@ -88,6 +94,7 @@ export function EmployeeRouteView({
                 onDepart={() => onStopDeparture(currentStop.customerId)}
                 onPause={onStopPause ? () => onStopPause(currentStop.customerId) : undefined}
                 onResume={onStopResume ? () => onStopResume(currentStop.customerId) : undefined}
+                onTakePayment={onTakePayment ? () => onTakePayment(currentStop.customerId) : undefined}
                 showTimer={true}
               />
             </div>

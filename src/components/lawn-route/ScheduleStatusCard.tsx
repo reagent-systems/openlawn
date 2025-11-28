@@ -27,14 +27,14 @@ export function ScheduleStatusCard({
 }: ScheduleStatusCardProps) {
   const [status, setStatus] = React.useState(calculateScheduleStatus(route, currentTime))
 
-  // Update status every 30 seconds
+  // Update status every 10 seconds for more real-time updates
   React.useEffect(() => {
     const updateStatus = () => {
       setStatus(calculateScheduleStatus(route, new Date()))
     }
 
     updateStatus()
-    const interval = setInterval(updateStatus, 30000) // Update every 30 seconds
+    const interval = setInterval(updateStatus, 10000) // Update every 10 seconds
 
     return () => clearInterval(interval)
   }, [route])
