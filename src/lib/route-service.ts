@@ -195,12 +195,14 @@ export const optimizeRouteForCrew = async (
   try {
     // Determine start location - prioritize company base location
     let startLocation = { lat: 30.0997, lng: -81.7065 }; // Default fallback
+    let baseLocation: { lat: number; lng: number } | null = null;
 
     // Try to get company's base location
     const { getCompany } = await import('./company-service');
     const company = await getCompany(companyId);
     if (company?.baseLocation) {
-      startLocation = { lat: company.baseLocation.lat, lng: company.baseLocation.lng };
+      baseLocation = { lat: company.baseLocation.lat, lng: company.baseLocation.lng };
+      startLocation = baseLocation;
       console.log('Using company base location:', startLocation);
     } else if (crew.availability.currentLocation) {
       startLocation = crew.availability.currentLocation;
@@ -209,37 +211,80 @@ export const optimizeRouteForCrew = async (
       console.log('Using default start location:', startLocation);
     }
 
+    const endLocation = baseLocation || startLocation; // Use base location as end, or same as start
+
     const optimizationResult = await tspService.optimizeRoute(limitedCustomers, {
       startLocation,
-      endLocation: startLocation, // Crews return to the same base location
+      endLocation, // Crews return to the same base location
       optimizeFor: 'distance',
       travelMode: 'driving',
     });
+
+    // Build optimized path with home base at start and end
+    const optimizedPath: { lat: number; lng: number }[] = [];
+    
+    // Add home base as start point if available
+    if (baseLocation) {
+      optimizedPath.push(baseLocation);
+    }
+    
+    // Add optimized customer path
+    optimizedPath.push(...optimizationResult.optimizedPath);
+    
+    // Add home base as end point if available
+    if (baseLocation) {
+      optimizedPath.push(baseLocation);
+    }
 
     return {
       companyId, // REQUIRED: Multi-tenant isolation
       crewId: crew.crewId,
       date,
-      customers: optimizationResult.optimizedCustomers,
-      optimizedPath: optimizationResult.optimizedPath,
+      customers: optimizationResult.optimizedCustomers, // ← Customers only, no home base
+      optimizedPath, // ← Includes home base at start and end
       estimatedDuration: optimizationResult.estimatedDuration,
       totalDistance: optimizationResult.totalDistance,
     };
   } catch (error) {
     console.error('TSP optimization failed in optimizeRouteForCrew, falling back to simple order:', error);
 
+    // Get base location for fallback path
+    let baseLocation: { lat: number; lng: number } | null = null;
+    try {
+      const { getCompany } = await import('./company-service');
+      const company = await getCompany(companyId);
+      if (company?.baseLocation) {
+        baseLocation = { lat: company.baseLocation.lat, lng: company.baseLocation.lng };
+      }
+    } catch (err) {
+      // Ignore error, baseLocation stays null
+    }
+
     // Fallback to simple order (preserving priority sorting)
-    const optimizedPath = limitedCustomers.map(customer => ({
+    const fallbackPath: { lat: number; lng: number }[] = [];
+    
+    // Add home base as start point if available
+    if (baseLocation) {
+      fallbackPath.push(baseLocation);
+    }
+    
+    // Add customer locations
+    fallbackPath.push(...limitedCustomers.map(customer => ({
       lat: customer.lat,
       lng: customer.lng
-    }));
+    })));
+    
+    // Add home base as end point if available
+    if (baseLocation) {
+      fallbackPath.push(baseLocation);
+    }
 
     return {
       companyId, // REQUIRED: Multi-tenant isolation
       crewId: crew.crewId,
       date,
       customers: limitedCustomers,
-      optimizedPath,
+      optimizedPath: fallbackPath,
       estimatedDuration: limitedCustomers.length * 30,
       totalDistance: 0,
     };
@@ -291,7 +336,20 @@ export const generateOptimalRoutes = async (companyId: string, date: Date): Prom
   
   console.log(`Customers wanting service on ${dayOfWeek}:`, customersWantingService.length);
   
-  // Step 3: Simple assignment - assign customers to crews based on service type compatibility
+  // Step 3: Get company base location (home base) for start/end points
+  let baseLocation: { lat: number; lng: number } | null = null;
+  try {
+    const { getCompany } = await import('./company-service');
+    const company = await getCompany(companyId);
+    if (company?.baseLocation) {
+      baseLocation = { lat: company.baseLocation.lat, lng: company.baseLocation.lng };
+      console.log('Using company base location as route start/end:', baseLocation);
+    }
+  } catch (error) {
+    console.warn('Could not fetch company base location:', error);
+  }
+
+  // Step 4: Simple assignment - assign customers to crews based on service type compatibility
   const routes: DailyRoute[] = [];
   
   for (const crew of availableCrews) {
@@ -315,24 +373,44 @@ export const generateOptimalRoutes = async (companyId: string, date: Date): Prom
       const tspService = getTSPOptimizationService(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '');
 
       try {
-        // Determine start location (use crew's current location or a default)
-        const startLocation = crew.availability.currentLocation || { lat: 30.0997, lng: -81.7065 }; // Default to Jacksonville, FL area
+        // Determine start/end location - prioritize company base location
+        const startLocation = baseLocation || crew.availability.currentLocation || { lat: 30.0997, lng: -81.7065 };
+        const endLocation = baseLocation || startLocation; // Use base location as end, or same as start
 
         console.log(`Optimizing route for crew ${crew.crewId} with ${assignedCustomers.length} customers`);
+        console.log(`Start location:`, startLocation);
+        console.log(`End location:`, endLocation);
 
         // Use TSP optimization to get optimal order
         const optimizationResult = await tspService.optimizeRoute(assignedCustomers, {
           startLocation,
+          endLocation,
           optimizeFor: 'distance',
           travelMode: 'driving',
         });
+
+        // Build optimized path with home base at start and end
+        const optimizedPath: { lat: number; lng: number }[] = [];
+        
+        // Add home base as start point if available
+        if (baseLocation) {
+          optimizedPath.push(baseLocation);
+        }
+        
+        // Add optimized customer path
+        optimizedPath.push(...optimizationResult.optimizedPath);
+        
+        // Add home base as end point if available
+        if (baseLocation) {
+          optimizedPath.push(baseLocation);
+        }
 
         const route: DailyRoute = {
           companyId, // REQUIRED: Multi-tenant isolation
           crewId: crew.crewId,
           date,
-          customers: optimizationResult.optimizedCustomers, // ← OPTIMIZED order!
-          optimizedPath: optimizationResult.optimizedPath,
+          customers: optimizationResult.optimizedCustomers, // ← OPTIMIZED order! (customers only, no home base)
+          optimizedPath, // ← Includes home base at start and end
           estimatedDuration: optimizationResult.estimatedDuration,
           totalDistance: optimizationResult.totalDistance,
         };
@@ -344,12 +422,27 @@ export const generateOptimalRoutes = async (companyId: string, date: Date): Prom
         console.error(`TSP optimization failed for crew ${crew.crewId}, falling back to original order:`, error);
 
         // Fallback to original order if TSP fails
+        const fallbackPath: { lat: number; lng: number }[] = [];
+        
+        // Add home base as start point if available
+        if (baseLocation) {
+          fallbackPath.push(baseLocation);
+        }
+        
+        // Add customer locations
+        fallbackPath.push(...assignedCustomers.map(c => ({ lat: c.lat, lng: c.lng })));
+        
+        // Add home base as end point if available
+        if (baseLocation) {
+          fallbackPath.push(baseLocation);
+        }
+
         const route: DailyRoute = {
           companyId, // REQUIRED: Multi-tenant isolation
           crewId: crew.crewId,
           date,
           customers: assignedCustomers,
-          optimizedPath: assignedCustomers.map(c => ({ lat: c.lat, lng: c.lng })),
+          optimizedPath: fallbackPath,
           estimatedDuration: assignedCustomers.length * 30, // 30 minutes per customer
           totalDistance: 0,
         };
