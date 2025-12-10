@@ -1250,6 +1250,9 @@ export default function LawnRoutePage() {
           <CompanyManagementSheet
             open={isCompanyManagementOpen}
             onOpenChange={setIsCompanyManagementOpen}
+            companyId={userProfile?.companyId || ''}
+            currentBaseLocation={baseLocation}
+            onLocationUpdated={handleLocationUpdated}
           />
 
           {/* Pending Users Sheet (Manager/Admin Only) */}
@@ -1350,6 +1353,9 @@ export default function LawnRoutePage() {
         <CompanyManagementSheet
           open={isCompanyManagementOpen}
           onOpenChange={setIsCompanyManagementOpen}
+          companyId={userProfile?.companyId || ''}
+          currentBaseLocation={baseLocation}
+          onLocationUpdated={handleLocationUpdated}
         />
 
         {/* Payment Sheet */}

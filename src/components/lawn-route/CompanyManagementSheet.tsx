@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useForm } from "react-hook-form"
 import {
   Sheet,
   SheetContent,
@@ -11,20 +12,56 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Building2, CreditCard, Users, Calendar } from "lucide-react"
+import { PlacesAutocompleteSimple } from "@/components/ui/places-autocomplete-simple"
+import { Building2, CreditCard, Users, Calendar, Home, Loader2 } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
 
 interface CompanyManagementSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  companyId?: string
+  currentBaseLocation?: { lat: number; lng: number; address: string } | null
+  onLocationUpdated?: () => void
 }
 
-export function CompanyManagementSheet({ open, onOpenChange }: CompanyManagementSheetProps) {
+export function CompanyManagementSheet({ 
+  open, 
+  onOpenChange, 
+  companyId,
+  currentBaseLocation,
+  onLocationUpdated 
+}: CompanyManagementSheetProps) {
   const { userProfile } = useAuth()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [isUpdatingLocation, setIsUpdatingLocation] = React.useState(false)
+
+  // Form for home base location
+  const locationForm = useForm({
+    defaultValues: {
+      address: currentBaseLocation?.address || '',
+      coordinates: currentBaseLocation ? { lat: currentBaseLocation.lat, lng: currentBaseLocation.lng } : undefined,
+    },
+  })
+
+  // Update form when current location changes
+  React.useEffect(() => {
+    if (currentBaseLocation) {
+      locationForm.setValue('address', currentBaseLocation.address)
+      locationForm.setValue('coordinates', { lat: currentBaseLocation.lat, lng: currentBaseLocation.lng })
+    }
+  }, [currentBaseLocation, locationForm])
 
   // Placeholder data - would come from Firebase in production
   const [companyData, setCompanyData] = React.useState({
@@ -61,6 +98,62 @@ export function CompanyManagementSheet({ open, onOpenChange }: CompanyManagement
       })
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleUpdateHomeBase = async (values: { address: string; coordinates?: { lat: number; lng: number } }) => {
+    if (!companyId) {
+      toast({
+        title: "Error",
+        description: "Company ID is required",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsUpdatingLocation(true)
+    try {
+      if (!values.address) {
+        toast({
+          title: "Error",
+          description: "Please enter an address",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (!values.coordinates) {
+        toast({
+          title: "Location Required",
+          description: "Please select an address from the autocomplete suggestions.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Update company base location
+      const { updateCompanyBaseLocation } = await import('@/lib/company-service')
+      await updateCompanyBaseLocation(companyId, {
+        lat: values.coordinates.lat,
+        lng: values.coordinates.lng,
+        address: values.address,
+      })
+
+      toast({
+        title: "Success",
+        description: "Home base location updated successfully",
+      })
+
+      onLocationUpdated?.()
+    } catch (error) {
+      console.error('Error updating base location:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update home base location. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUpdatingLocation(false)
     }
   }
 
@@ -116,6 +209,73 @@ export function CompanyManagementSheet({ open, onOpenChange }: CompanyManagement
                   </div>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Home Base Location */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Home className="w-4 h-4" />
+                Home Base Location
+              </CardTitle>
+              <CardDescription>
+                Set your home base location where crews start and end their day
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Form {...locationForm}>
+                <form onSubmit={locationForm.handleSubmit(handleUpdateHomeBase)} className="space-y-4">
+                  <FormField
+                    control={locationForm.control}
+                    name="address"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Home Base Address</FormLabel>
+                        <FormControl>
+                          <PlacesAutocompleteSimple
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="Start typing an address..."
+                            disabled={isUpdatingLocation}
+                            onPlaceSelect={(place: google.maps.places.PlaceResult) => {
+                              // Extract coordinates when a place is selected
+                              if (place.geometry?.location) {
+                                const lat = place.geometry.location.lat()
+                                const lng = place.geometry.location.lng()
+                                locationForm.setValue('coordinates', { lat, lng })
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Start typing and select your business address from the suggestions
+                        </FormDescription>
+                        {currentBaseLocation && (
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Current: {currentBaseLocation.address}
+                          </p>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button 
+                    type="submit" 
+                    disabled={isUpdatingLocation}
+                    className="w-full"
+                  >
+                    {isUpdatingLocation ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Location'
+                    )}
+                  </Button>
+                </form>
+              </Form>
             </CardContent>
           </Card>
 
