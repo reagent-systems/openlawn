@@ -1,3 +1,5 @@
+![OpenLawn Screenshot](./Screenshot%202026-01-21%20at%2020.48.40.png)
+
 # 🌱 OpenLawn - AI-Powered Lawn Care Management Platform
 
 [![Next.js](https://img.shields.io/badge/Next.js-15.3.3-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
