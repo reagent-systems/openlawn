@@ -1,4 +1,4 @@
-![OpenLawn Screenshot](./Screenshot%202026-01-21%20at%2020.48.40.png)
+![OpenLawn Screenshot](./Screenshot%202026-01-21%20at%2020.48.40.jpg)
 
 # 🌱 OpenLawn - AI-Powered Lawn Care Management Platform
 
