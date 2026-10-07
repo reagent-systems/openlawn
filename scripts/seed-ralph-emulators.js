@@ -10,7 +10,7 @@ const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, Timestamp } = require('firebase-admin/firestore');
 
-const PROJECT_ID = 'demo-openlawn';
+const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'openlawn';
 const COMPANY_ID = 'company-ralph-test';
 const COMPANY_NAME = 'Ralph Test Lawn Co';
 const CREW_ID = 'Lion-100';
