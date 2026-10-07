@@ -1,20 +1,25 @@
 import type {Metadata} from 'next';
-import { Inter } from 'next/font/google';
+import { Bebas_Neue, Source_Sans_3 } from 'next/font/google';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/hooks/use-auth"
 import { RoleBasedRouter } from "@/components/auth/RoleBasedRouter"
-import { EnvCheck } from "@/components/ui/env-check"
 
-const inter = Inter({
+const brand = Bebas_Neue({
+  subsets: ['latin'],
+  weight: ['400'],
+  variable: '--font-brand',
+});
+
+const body = Source_Sans_3({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
-  variable: '--font-inter',
+  variable: '--font-body',
 });
 
 export const metadata: Metadata = {
   title: 'OpenLawn',
-  description: 'AI-powered CRM for lawn care businesses',
+  description: 'Lawn care routing and crew run sheets',
 };
 
 export default function RootLayout({
@@ -24,13 +29,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.className} font-body antialiased`}>
+      <body className={`${brand.variable} ${body.variable} font-body antialiased`}>
         <AuthProvider>
           <RoleBasedRouter>
             {children}
           </RoleBasedRouter>
           <Toaster />
-          <EnvCheck />
         </AuthProvider>
       </body>
     </html>
