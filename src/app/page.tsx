@@ -13,7 +13,6 @@ import { EditEmployeeSheet } from "@/components/lawn-route/EditEmployeeSheet"
 import { AddCrewSheet } from "@/components/lawn-route/AddCrewSheet"
 import { CrewPopup } from "@/components/lawn-route/CrewPopup"
 import { CompanySettingsSheet } from "@/components/lawn-route/CompanySettingsSheet"
-import { EmployeeRouteView } from "@/components/lawn-route/EmployeeRouteView"
 import { Header } from "@/components/lawn-route/Header"
 import { TimeAnalysisBar } from "@/components/lawn-route/TimeAnalysisBar"
 import { ProfileSheet } from "@/components/lawn-route/ProfileSheet"
@@ -21,6 +20,13 @@ import { ScheduleSheet } from "@/components/lawn-route/ScheduleSheet"
 import { CompanyManagementSheet } from "@/components/lawn-route/CompanyManagementSheet"
 import { PendingUsersSheet } from "@/components/lawn-route/PendingUsersSheet"
 import { TodaysRoutesPanel } from "@/components/lawn-route/TodaysRoutesPanel"
+import { AppShellNav, type AppShellTab } from "@/components/lawn-route/AppShellNav"
+import {
+  RunSheetSummary,
+  RunSheetStopsList,
+  stopsFromDailyRoute,
+  stopsFromTimingRoute,
+} from "@/components/lawn-route/RunSheet"
 import { PendingApprovalScreen } from "@/components/auth/PendingApprovalScreen"
 import { Plus, User as UserIcon, Users, Building2 } from "lucide-react"
 import { subscribeToCustomers, subscribeToAllCustomers, addCustomer } from "@/lib/customer-service"
@@ -45,8 +51,10 @@ export default function LawnRoutePage() {
   const [companyName, setCompanyName] = useState<string>('')
   const [baseLocation, setBaseLocation] = useState<{ lat: number; lng: number; address: string } | null>(null)
 
-  // State for manager view
+  // State for manager view / run sheet shell
   const [activeView, setActiveView] = useState<'customers' | 'employees' | 'crews'>('customers')
+  const [shellTab, setShellTab] = useState<AppShellTab>('run-sheet')
+  const [panelMode, setPanelMode] = useState<'run' | 'customers' | 'employees' | 'crews'>('run')
   const [isAddCustomerSheetOpen, setIsAddCustomerSheetOpen] = useState(false)
   const [isEditCustomerSheetOpen, setIsEditCustomerSheetOpen] = useState(false)
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
@@ -1019,6 +1027,39 @@ export default function LawnRoutePage() {
     }
   }
 
+  const primaryRoute = routes.find((r) => r.customers.length > 0) || routes[0] || null
+  const runSheetStops = stopsFromDailyRoute(primaryRoute)
+  const completedStops = runSheetStops.filter((s) => s.status === 'done').length
+  const routeLabel = primaryRoute
+    ? `Route ${primaryRoute.crewId}`
+    : 'Route —'
+
+  const handleShellTab = (tab: AppShellTab) => {
+    setShellTab(tab)
+    if (tab === 'run-sheet') {
+      setPanelMode('run')
+    } else if (tab === 'schedule') {
+      setIsScheduleSheetOpen(true)
+    } else if (tab === 'new-stop') {
+      setIsAddCustomerSheetOpen(true)
+    } else if (tab === 'settings') {
+      setIsProfileSheetOpen(true)
+    }
+  }
+
+  const mapPane = (
+    <RouteDisplay
+      customers={customers}
+      employees={users.filter(user => user.role === 'employee' || user.role === 'manager')}
+      routes={routes}
+      selectedCustomer={selectedCustomer}
+      onSelectCustomer={handleSelectCustomer}
+      onRouteClick={handleRouteClick}
+      baseLocation={baseLocation}
+      apiKey={googleMapsConfig.apiKey}
+    />
+  )
+
   // If user is pending approval, show the pending approval screen
   if (userProfile?.accountStatus === 'pending') {
     return <PendingApprovalScreen />
@@ -1035,64 +1076,61 @@ export default function LawnRoutePage() {
             onOpenSchedule={() => setIsScheduleSheetOpen(true)}
             onOpenCompanyManagement={() => setIsCompanyManagementOpen(true)}
             onOpenPendingUsers={() => setIsPendingUsersSheetOpen(true)}
+            onOpenCustomers={() => { setPanelMode('customers'); setActiveView('customers'); setShellTab('run-sheet') }}
+            onOpenEmployees={() => { setPanelMode('employees'); setActiveView('employees'); setShellTab('run-sheet') }}
+            onOpenCrews={() => { setPanelMode('crews'); setActiveView('crews'); setShellTab('run-sheet') }}
           />
-          <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
-            <div className="md:col-span-2 h-full w-full">
-              <RouteDisplay
-                customers={customers}
-                employees={users.filter(user => user.role === 'employee' || user.role === 'manager')}
-                routes={routes}
-                selectedCustomer={selectedCustomer}
-                onSelectCustomer={handleSelectCustomer}
-                onRouteClick={handleRouteClick}
-                baseLocation={baseLocation}
-                apiKey={googleMapsConfig.apiKey}
-              />
-            </div>
-            <div 
-              className="md:col-span-1 flex flex-col overflow-hidden touch-pan-y"
-              onTouchStart={onTouchStart}
-              onTouchMove={onTouchMove}
-              onTouchEnd={onTouchEnd}
-            >
-              {/* Content Area */}
-              <div className="flex-1 overflow-y-auto p-4">
-                {activeView === 'customers' && renderCustomersView()}
-                {activeView === 'employees' && renderEmployeesView()}
-                {activeView === 'crews' && renderCrewsView()}
+          <main className="flex-1 overflow-hidden">
+            {shellTab === 'map' ? (
+              <div className="h-full w-full">{mapPane}</div>
+            ) : panelMode !== 'run' ? (
+              <div
+                className="h-full overflow-y-auto p-4"
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+              >
+                {panelMode === 'customers' && renderCustomersView()}
+                {panelMode === 'employees' && renderEmployeesView()}
+                {panelMode === 'crews' && renderCrewsView()}
               </div>
-
-              {/* Navigation Footer */}
-              <div className="flex items-center justify-center p-3 border-t flex-shrink-0 bg-background">
-                <div className="flex items-center w-full gap-1">
-                  <div
-                    onClick={() => setActiveView('customers')}
-                    className={`flex-1 h-4 rounded-full transition-all cursor-pointer ${
-                      activeView === 'customers'
-                        ? 'bg-primary'
-                        : 'bg-muted'
-                    }`}
+            ) : (
+              <div className="grid h-full grid-rows-[auto_1fr] md:grid-cols-2 md:grid-rows-1 overflow-hidden">
+                <div className="overflow-y-auto p-3 md:p-4 space-y-4 border-b md:border-b-0 md:border-r">
+                  <RunSheetSummary
+                    routeLabel={routeLabel}
+                    completed={completedStops}
+                    total={runSheetStops.length}
+                    estimatedMinutesRemaining={primaryRoute?.estimatedDuration}
+                    mapSlot={
+                      <button
+                        type="button"
+                        onClick={() => setShellTab('map')}
+                        className="flex h-[140px] w-full flex-col items-center justify-center gap-1 bg-[#eef1e8] text-xs font-semibold uppercase tracking-wide text-primary md:hidden"
+                      >
+                        Open map
+                        <span className="text-[10px] font-normal text-muted-foreground">
+                          {runSheetStops.length} stops · flat view
+                        </span>
+                      </button>
+                    }
                   />
-                  <div
-                    onClick={() => setActiveView('employees')}
-                    className={`flex-1 h-4 rounded-full transition-all cursor-pointer ${
-                      activeView === 'employees'
-                        ? 'bg-primary'
-                        : 'bg-muted'
-                    }`}
+                  <RunSheetStopsList
+                    stops={runSheetStops}
+                    onSelectStop={(id) => {
+                      const customer = customers.find((c) => c.id === id)
+                      if (customer) handleSelectCustomer(customer)
+                    }}
                   />
-                  <div
-                    onClick={() => setActiveView('crews')}
-                    className={`flex-1 h-4 rounded-full transition-all cursor-pointer ${
-                      activeView === 'crews'
-                        ? 'bg-primary'
-                        : 'bg-muted'
-                    }`}
-                  />
+                  {routes.length > 1 && (
+                    <TodaysRoutesPanel routes={routes} onSelectRoute={handleRouteClick} />
+                  )}
                 </div>
+                <div className="hidden md:block h-full min-h-0">{mapPane}</div>
               </div>
-            </div>
+            )}
           </main>
+          <AppShellNav active={shellTab} onChange={handleShellTab} />
 
           {/* Add Customer Sheet */}
           <AddCustomerSheet
@@ -1208,7 +1246,15 @@ export default function LawnRoutePage() {
     )
   }
 
-  // Employee view (customer management only)
+  // Employee view — same Run Sheet shell
+  const employeeStops = timingRoutes[0]
+    ? stopsFromTimingRoute(timingRoutes[0])
+    : runSheetStops
+  const employeeCompleted = employeeStops.filter((s) => s.status === 'done').length
+  const employeeRouteLabel = userProfile?.crewId
+    ? `Route ${userProfile.crewId}`
+    : routeLabel
+
   return (
     <ProtectedRoute>
       <div className="flex flex-col h-svh bg-background text-foreground font-body">
@@ -1219,46 +1265,78 @@ export default function LawnRoutePage() {
           onOpenSchedule={() => setIsScheduleSheetOpen(true)}
           onOpenCompanyManagement={() => setIsCompanyManagementOpen(true)}
         />
-        <main className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-3 flex-grow overflow-hidden">
-          <div className="md:col-span-2 h-full w-full">
-            <RouteDisplay
-              customers={customers}
-              employees={users.filter(user => user.role === 'employee' || user.role === 'manager')}
-              routes={routes}
-              selectedCustomer={selectedCustomer}
-              onSelectCustomer={handleSelectCustomer}
-              baseLocation={baseLocation}
-              apiKey={googleMapsConfig.apiKey}
-            />
-          </div>
-          <div className="md:col-span-1 flex flex-col overflow-hidden">
-            {/* Content Area */}
-            <div className="flex-1 overflow-y-auto">
-              {timingRoutes.length > 0 ? (
-                <EmployeeRouteView
-                  route={timingRoutes[0]}
-                  onStopArrival={handleStopArrival}
-                  onStopDeparture={handleStopDeparture}
-                  onStopPause={handleStopPause}
-                  onStopResume={handleStopResume}
+        <main className="flex-1 overflow-hidden">
+          {shellTab === 'map' ? (
+            <div className="h-full w-full">{mapPane}</div>
+          ) : (
+            <div className="grid h-full grid-rows-[auto_1fr] md:grid-cols-2 md:grid-rows-1 overflow-hidden">
+              <div className="overflow-y-auto p-3 md:p-4 space-y-4 border-b md:border-b-0 md:border-r">
+                <RunSheetSummary
+                  routeLabel={employeeRouteLabel}
+                  completed={employeeCompleted}
+                  total={employeeStops.length}
+                  estimatedMinutesRemaining={
+                    timingRoutes[0]?.estimatedDuration ?? primaryRoute?.estimatedDuration
+                  }
+                  mapSlot={
+                    <button
+                      type="button"
+                      onClick={() => setShellTab('map')}
+                      className="flex h-[140px] w-full flex-col items-center justify-center gap-1 bg-[#eef1e8] text-xs font-semibold uppercase tracking-wide text-primary md:hidden"
+                    >
+                      Open map
+                      <span className="text-[10px] font-normal text-muted-foreground">
+                        {employeeStops.length} stops · flat view
+                      </span>
+                    </button>
+                  }
                 />
-              ) : (
-                <div className="p-4">
-                  {renderCustomersView()}
-                </div>
-              )}
+                <RunSheetStopsList
+                  stops={employeeStops}
+                  onSelectStop={(id) => {
+                    const customer = customers.find((c) => c.id === id)
+                    if (customer) handleSelectCustomer(customer)
+                  }}
+                />
+                {timingRoutes[0] && (() => {
+                  const current = timingRoutes[0].stops.find((s) => s.status === 'in_progress')
+                  const next = timingRoutes[0].stops.find((s) => s.status === 'pending')
+                  const focus = current || next
+                  if (!focus) return null
+                  return (
+                    <div className="rounded-2xl border bg-card p-4 space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        {current ? 'Current stop' : 'Next stop'}
+                      </p>
+                      <p className="text-lg font-semibold text-ink">{focus.customerName}</p>
+                      <p className="text-sm text-muted-foreground">{focus.address}</p>
+                      <button
+                        type="button"
+                        className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold uppercase tracking-wide text-primary-foreground"
+                        onClick={() =>
+                          current
+                            ? handleStopDeparture(focus.customerId)
+                            : handleStopArrival(focus.customerId)
+                        }
+                      >
+                        {current ? 'Complete stop' : 'Arrive at stop'}
+                      </button>
+                    </div>
+                  )
+                })()}
+              </div>
+              <div className="hidden md:block h-full min-h-0">{mapPane}</div>
             </div>
-          </div>
+          )}
         </main>
+        <AppShellNav active={shellTab} onChange={handleShellTab} />
 
-        {/* Add Customer Sheet */}
         <AddCustomerSheet
           open={isAddCustomerSheetOpen}
           onOpenChange={setIsAddCustomerSheetOpen}
           onAddCustomer={handleAddCustomer}
         />
 
-        {/* Edit Customer Sheet */}
         <EditCustomerSheet
           open={isEditCustomerSheetOpen}
           onOpenChange={(open) => {
@@ -1272,20 +1350,17 @@ export default function LawnRoutePage() {
           onDeleteCustomer={handleDeleteCustomer}
         />
 
-        {/* Profile Sheet */}
         <ProfileSheet
           open={isProfileSheetOpen}
           onOpenChange={setIsProfileSheetOpen}
         />
 
-        {/* Schedule Sheet */}
         <ScheduleSheet
           open={isScheduleSheetOpen}
           onOpenChange={setIsScheduleSheetOpen}
           routes={routes}
         />
 
-        {/* Company Settings Sheet (employee can view/update base location) */}
         <CompanySettingsSheet
           open={isCompanySettingsOpen}
           onOpenChange={setIsCompanySettingsOpen}
@@ -1294,7 +1369,6 @@ export default function LawnRoutePage() {
           onLocationUpdated={handleLocationUpdated}
         />
 
-        {/* Company Management Sheet (Admin Only) */}
         <CompanyManagementSheet
           open={isCompanyManagementOpen}
           onOpenChange={setIsCompanyManagementOpen}

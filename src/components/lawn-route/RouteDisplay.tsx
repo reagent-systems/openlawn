@@ -10,6 +10,7 @@ import {
 } from '@react-google-maps/api'
 import type { Customer, User, DailyRoute } from '@/lib/firebase-types'
 import { Loader2, AlertTriangle } from 'lucide-react'
+import { flatRunSheetMapOptions } from '@/lib/flat-map-styles'
 
 interface RouteDisplayProps {
   customers: Customer[]
@@ -35,25 +36,7 @@ const center = {
   lng: -81.5158,
 }
 
-const mapOptions = {
-  disableDefaultUI: true,
-  zoomControl: true,
-  styles: [
-    {
-      featureType: 'poi',
-      stylers: [{ visibility: 'off' }],
-    },
-    {
-      featureType: 'transit',
-      stylers: [{ visibility: 'off' }],
-    },
-    {
-        featureType: "road",
-        elementType: "labels.icon",
-        stylers: [{ visibility: "off" }]
-    }
-  ],
-}
+const mapOptions = flatRunSheetMapOptions
 
 export function RouteDisplay({
   customers,
@@ -86,7 +69,6 @@ export function RouteDisplay({
 
   const mapRef = React.useRef<google.maps.Map | null>(null)
   const [directionsResponses, setDirectionsResponses] = React.useState<google.maps.DirectionsResult[]>([])
-  const [selectedRouteIndex, _setSelectedRouteIndex] = React.useState<number | null>(null)
 
   React.useEffect(() => {
     const map = mapRef.current
@@ -119,15 +101,7 @@ export function RouteDisplay({
     map.fitBounds(bounds, 48)
   }, [isLoaded, customers, routes, baseLocation])
 
-  // Generate a color based on crewId
-  const generateColor = (crewId: string): string => {
-    let hash = 0;
-    for (let i = 0; i < crewId.length; i++) {
-      hash = crewId.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const hue = hash % 360;
-    return `hsl(${hue}, 70%, 50%)`;
-  };
+  const routeStroke = '#6B7D50'
 
   // Check if a route is for today or tomorrow
   const isTodayRoute = (route: DailyRoute): boolean => {
@@ -243,7 +217,7 @@ export function RouteDisplay({
 
   if (!isLoaded) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-gray-200">
+      <div className="flex h-full w-full items-center justify-center bg-[#eef1e8]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     )
@@ -257,21 +231,22 @@ export function RouteDisplay({
       options={mapOptions}
       onLoad={(map) => {mapRef.current = map}}
     >
-      {/* Customer markers */}
+      {/* Customer markers — numbered olive pins for routed stops */}
       {customers.map((customer) => {
-        // Ensure lat/lng are numbers
         const lat = Number(customer.lat);
         const lng = Number(customer.lng);
+        if (isNaN(lat) || isNaN(lng)) return null;
 
-        // Skip if invalid coordinates
-        if (isNaN(lat) || isNaN(lng)) {
-          console.warn(`Invalid coordinates for customer ${customer.name}:`, customer.lat, customer.lng);
-          return null;
+        let stopNumber: number | null = null;
+        for (const route of routes) {
+          const idx = route.customers.findIndex((c) => c.id === customer.id);
+          if (idx >= 0) {
+            stopNumber = idx + 1;
+            break;
+          }
         }
 
-        // Check if this customer is in the selected tomorrow route
-        const isInSelectedRoute = selectedRouteIndex !== null &&
-          routes[selectedRouteIndex]?.customers.some(c => c.id === customer.id);
+        const selected = selectedCustomer?.id === customer.id;
 
         return (
           <Marker
@@ -279,14 +254,24 @@ export function RouteDisplay({
             position={{ lat, lng }}
             title={customer.name}
             onClick={() => onSelectCustomer(customer)}
+            label={
+              stopNumber != null
+                ? {
+                    text: String(stopNumber),
+                    color: '#ffffff',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                  }
+                : undefined
+            }
             icon={{
               path: google.maps.SymbolPath.CIRCLE,
-              scale: selectedCustomer?.id === customer.id ? 10 : isInSelectedRoute ? 9 : 7,
-              fillColor: selectedCustomer?.id === customer.id ? 'hsl(var(--ring))' :
-                        isInSelectedRoute ? 'hsl(var(--accent))' : 'hsl(var(--primary))',
+              scale: selected ? 14 : stopNumber != null ? 12 : 7,
+              fillColor: selected ? '#4A5A34' : routeStroke,
               fillOpacity: 1,
               strokeWeight: 2,
-              strokeColor: 'white',
+              strokeColor: '#ffffff',
+              labelOrigin: new google.maps.Point(0, 0),
             }}
           />
         );
@@ -355,7 +340,6 @@ export function RouteDisplay({
       {/* Route directions */}
       {directionsResponses.map((directionsResponse, index) => {
         const route = routes[index];
-        const color = generateColor(route.crewId);
         const isToday = isTodayRoute(route);
         
         return (
@@ -363,12 +347,12 @@ export function RouteDisplay({
             key={`directions-${index}`}
             directions={directionsResponse}
             options={{
-              suppressMarkers: true, // We're using our own markers
+              suppressMarkers: true,
               polylineOptions: {
-                strokeColor: color,
-                strokeOpacity: isToday ? 0.8 : 0.3, // Solid for today, transparent for tomorrow
+                strokeColor: routeStroke,
+                strokeOpacity: isToday ? 0.9 : 0.35,
                 strokeWeight: isToday ? 4 : 2,
-                clickable: !isToday, // Only tomorrow routes are clickable
+                clickable: !isToday,
               },
             }}
           />
@@ -387,8 +371,8 @@ export function RouteDisplay({
             key={`path-${route.crewId}`}
             path={path}
             options={{
-              strokeColor: generateColor(route.crewId),
-              strokeOpacity: isToday ? 0.8 : 0.35,
+              strokeColor: routeStroke,
+              strokeOpacity: isToday ? 0.9 : 0.35,
               strokeWeight: isToday ? 4 : 2,
             }}
           />

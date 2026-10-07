@@ -151,7 +151,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onSuccess, defaultTab = 'sig
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl font-bold text-center">OpenLawn</CardTitle>
+        <CardTitle className="font-brand text-3xl text-center text-primary tracking-[0.14em]">OpenLawn</CardTitle>
         <CardDescription className="text-center">
           Sign in to your account or create a new one
         </CardDescription>

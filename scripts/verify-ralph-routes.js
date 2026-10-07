@@ -7,7 +7,7 @@ process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8080';
 const admin = require('firebase-admin');
 const { getFirestore } = require('firebase-admin/firestore');
 
-const PROJECT_ID = 'demo-openlawn';
+const PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'openlawn';
 const COMPANY_ID = 'company-ralph-test';
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 

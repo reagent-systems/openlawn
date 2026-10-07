@@ -1,6 +1,6 @@
 "use client"
 
-import { Leaf, User, LogOut, Calendar, Building2, Download, UserPlus } from 'lucide-react';
+import { Menu, MoreVertical, ClipboardList } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -16,6 +16,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect } from 'react';
 import { subscribeToPendingUsers } from '@/lib/user-service';
+import { LogOut, Calendar, Building2, User, Download, UserPlus, Users, User as UserIcon } from 'lucide-react';
 
 interface HeaderProps {
   onOpenCompanySettings?: () => void;
@@ -24,6 +25,10 @@ interface HeaderProps {
   onOpenSchedule?: () => void;
   onOpenCompanyManagement?: () => void;
   onOpenPendingUsers?: () => void;
+  onOpenMenu?: () => void;
+  onOpenCustomers?: () => void;
+  onOpenEmployees?: () => void;
+  onOpenCrews?: () => void;
 }
 
 export function Header({
@@ -32,13 +37,16 @@ export function Header({
   onOpenProfile,
   onOpenSchedule,
   onOpenCompanyManagement,
-  onOpenPendingUsers
+  onOpenPendingUsers,
+  onOpenMenu,
+  onOpenCustomers,
+  onOpenEmployees,
+  onOpenCrews,
 }: HeaderProps) {
   const { user, userProfile, signOut, loading } = useAuth();
   const { toast } = useToast();
   const [pendingUsersCount, setPendingUsersCount] = useState(0);
 
-  // Subscribe to pending users count for managers
   useEffect(() => {
     if (!userProfile?.companyId) return;
     if (userProfile.role !== 'manager' && userProfile.role !== 'admin') return;
@@ -49,13 +57,6 @@ export function Header({
 
     return () => unsubscribe();
   }, [userProfile?.companyId, userProfile?.role]);
-
-  // Debug logging
-  console.log('Header Auth State:', {
-    user: user ? 'Present' : 'Missing',
-    userProfile: userProfile ? 'Present' : 'Missing',
-    loading
-  });
 
   const handleSignOut = async () => {
     try {
@@ -82,150 +83,132 @@ export function Header({
       .slice(0, 2);
   };
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return 'bg-red-100 text-red-800';
-      case 'manager':
-        return 'bg-blue-100 text-blue-800';
-      case 'employee':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const isManager = userProfile?.role === 'manager' || userProfile?.role === 'admin';
 
   return (
-    <header className="flex items-center justify-between p-4 border-b bg-background z-10 shadow-sm">
-      <div className="flex items-center">
-        <Leaf className="text-primary w-6 h-6 mr-2" />
-        <h1 className="text-xl font-bold text-gray-800 font-headline">
-          openlawn
-        </h1>
-      </div>
-
-      {loading ? (
-        <div className="flex items-center space-x-3">
-          <div className="h-10 w-10 rounded-full bg-muted animate-pulse"></div>
-        </div>
-      ) : user ? (
-        <div className="flex items-center space-x-3 ml-auto">
-          {userProfile && (
-            <Badge className={getRoleColor(userProfile.role)}>
-              {userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1)}
-            </Badge>
-          )}
-
-          {/* Export Button - Only for managers and admins */}
-          {onExportMetrics && userProfile && (userProfile.role === 'manager' || userProfile.role === 'admin') && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onExportMetrics}
-              className="flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Export</span>
-            </Button>
-          )}
-
-          {/* Pending Users Button - Only for managers and admins */}
-          {onOpenPendingUsers && userProfile && (userProfile.role === 'manager' || userProfile.role === 'admin') && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onOpenPendingUsers}
-              className="flex items-center gap-2 relative"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span className="hidden sm:inline">Pending</span>
-              {pendingUsersCount > 0 && (
-                <Badge variant="destructive" className="ml-1 h-5 w-5 flex items-center justify-center p-0 text-xs">
-                  {pendingUsersCount}
-                </Badge>
-              )}
-            </Button>
-          )}
-
+    <header className="flex items-center justify-between gap-3 px-3 py-3 border-b bg-card z-10">
+      <div className="flex items-center gap-1 min-w-[2.5rem]">
+        {(onOpenMenu || isManager) && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-10 w-10 rounded-full hover:bg-accent hover:text-accent-foreground transition-colors">
-                <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
-                  <AvatarImage 
-                    src={userProfile?.photoURL || ''} 
-                    alt={userProfile?.displayName || user.email || ''} 
-                  />
-                  <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                    {getInitials(userProfile?.displayName || user.email || 'U')}
-                  </AvatarFallback>
-                </Avatar>
+              <Button variant="ghost" size="icon" className="text-primary" onClick={onOpenMenu}>
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Menu</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-64" align="end" forceMount>
-              <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col space-y-2">
+            <DropdownMenuContent align="start" className="w-52">
+              {isManager && (
+                <>
+                  <DropdownMenuItem onClick={onOpenCustomers} className="cursor-pointer">
+                    <UserIcon className="mr-2 h-4 w-4" />
+                    Customers
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onOpenEmployees} className="cursor-pointer">
+                    <Users className="mr-2 h-4 w-4" />
+                    Employees
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={onOpenCrews} className="cursor-pointer">
+                    <Building2 className="mr-2 h-4 w-4" />
+                    Crews
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              {onExportMetrics && isManager && (
+                <DropdownMenuItem onClick={onExportMetrics} className="cursor-pointer">
+                  <Download className="mr-2 h-4 w-4" />
+                  Export metrics
+                </DropdownMenuItem>
+              )}
+              {onOpenPendingUsers && isManager && (
+                <DropdownMenuItem onClick={onOpenPendingUsers} className="cursor-pointer">
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Pending
+                  {pendingUsersCount > 0 && (
+                    <Badge variant="destructive" className="ml-auto h-5 min-w-5 justify-center px-1">
+                      {pendingUsersCount}
+                    </Badge>
+                  )}
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+
+      <h1 className="font-brand text-2xl sm:text-3xl text-primary leading-none">
+        OpenLawn
+      </h1>
+
+      <div className="flex items-center justify-end gap-1 min-w-[2.5rem]">
+        {loading ? (
+          <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
+        ) : user ? (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary hidden sm:inline-flex"
+              onClick={onOpenSchedule}
+            >
+              <ClipboardList className="h-5 w-5" />
+              <span className="sr-only">Schedule</span>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-primary">
+                  <MoreVertical className="h-5 w-5" />
+                  <span className="sr-only">More</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-64" align="end" forceMount>
+                <DropdownMenuLabel className="font-normal">
                   <div className="flex items-center space-x-3">
-                    <Avatar className="h-12 w-12">
-                      <AvatarImage 
-                        src={userProfile?.photoURL || ''} 
-                        alt={userProfile?.displayName || user.email || ''} 
-                      />
+                    <Avatar className="h-10 w-10 border border-border">
+                      <AvatarImage src={userProfile?.photoURL || ''} />
                       <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
                         {getInitials(userProfile?.displayName || user.email || 'U')}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex flex-col">
-                      <p className="text-sm font-semibold leading-none">
+                      <p className="text-sm font-semibold">
                         {userProfile?.displayName || user.email || 'User'}
                       </p>
-                      <p className="text-xs leading-none text-muted-foreground mt-1">
-                        {user.email}
-                      </p>
-                      {userProfile && (
-                        <Badge className={`mt-1 w-fit text-xs ${getRoleColor(userProfile.role)}`}>
-                          {userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1)}
-                        </Badge>
-                      )}
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
                     </div>
                   </div>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onOpenSchedule} className="cursor-pointer">
-                <Calendar className="mr-2 h-4 w-4" />
-                <span>Schedule</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onOpenProfile} className="cursor-pointer">
-                <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
-              </DropdownMenuItem>
-              {(userProfile?.role === 'admin' || userProfile?.role === 'manager') && (
-                <DropdownMenuItem onClick={onOpenCompanyManagement} className="cursor-pointer">
-                  <Building2 className="mr-2 h-4 w-4" />
-                  <span>Company</span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onOpenSchedule} className="cursor-pointer">
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Schedule
                 </DropdownMenuItem>
-              )}
-              {onOpenCompanySettings && userProfile?.role === 'employee' && (
-                <DropdownMenuItem onClick={onOpenCompanySettings} className="cursor-pointer">
-                  <Building2 className="mr-2 h-4 w-4" />
-                  <span>Company Settings</span>
+                <DropdownMenuItem onClick={onOpenProfile} className="cursor-pointer">
+                  <User className="mr-2 h-4 w-4" />
+                  Profile
                 </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive">
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Sign out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ) : (
-        <div className="flex items-center space-x-3">
-          <Button variant="outline" size="sm">
-            Sign In
-          </Button>
-        </div>
-      )}
+                {(userProfile?.role === 'admin' || userProfile?.role === 'manager') && (
+                  <DropdownMenuItem onClick={onOpenCompanyManagement} className="cursor-pointer">
+                    <Building2 className="mr-2 h-4 w-4" />
+                    Company
+                  </DropdownMenuItem>
+                )}
+                {onOpenCompanySettings && userProfile?.role === 'employee' && (
+                  <DropdownMenuItem onClick={onOpenCompanySettings} className="cursor-pointer">
+                    <Building2 className="mr-2 h-4 w-4" />
+                    Company Settings
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        ) : null}
+      </div>
     </header>
   );
 }
